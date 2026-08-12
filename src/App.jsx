@@ -336,13 +336,25 @@ export default function App() {
   const nameOf = (id) => players.find((p) => p.id === id)?.name || "?";
 
   const today = todayStr();
-  const regByDate = useMemo(() => {
+  const regSessions = useMemo(() => {
     const g = {};
-    signups.forEach((s) => { (g[s.date] = g[s.date] || []).push(s); });
-    Object.values(g).forEach((a) => a.sort((x, y) => (x.at || "").localeCompare(y.at || "")));
-    return g;
+    signups.forEach((s) => {
+      const key = s.date + "|" + (s.time || "");
+      if (!g[key]) g[key] = { key, date: s.date, time: s.time || "", list: [] };
+      g[key].list.push(s);
+    });
+    const arr = Object.values(g);
+    arr.forEach((sess) => sess.list.sort((a, b) => (a.at || "").localeCompare(b.at || "")));
+    const tmin = (t) => {
+      if (!t) return 0;
+      const [h, ap] = t.split(" ");
+      let hh = Number(h) % 12;
+      if ((ap || "").toUpperCase() === "PM") hh += 12;
+      return hh * 60;
+    };
+    arr.sort((a, b) => a.date.localeCompare(b.date) || tmin(a.time) - tmin(b.time));
+    return arr;
   }, [signups]);
-  const regDates = useMemo(() => Object.keys(regByDate).sort(), [regByDate]);
   const todaySignups = useMemo(() => {
     const seen = new Set(), out = [];
     signups.filter((s) => s.date === today).forEach((s) => {
@@ -651,29 +663,28 @@ export default function App() {
               {regMsg && <p className={"bd-hint" + (regMsg.includes("\u2713") ? "" : " warn")} style={{ textAlign: "center" }}>{regMsg}</p>}
             </div>
 
-            {regDates.length === 0 ? (
+            {regSessions.length === 0 ? (
               <div className="bd-empty">
                 <CalendarCheck size={30} strokeWidth={1.6} />
                 <p>No sign-ups yet</p>
                 <span>Add your name, the date, and the start time to sign up for a session.</span>
               </div>
             ) : (
-              regDates.map((date) => (
-                <div key={date} className="bd-reg-day">
+              regSessions.map((sess) => (
+                <div key={sess.key} className="bd-reg-day">
                   <div className="bd-reg-date">
-                    {fmtDate(date)}
-                    {date === today && <span className="bd-today">Today</span>}
-                    <span className="bd-reg-count">{regByDate[date].length}</span>
+                    <span className="bd-reg-slot">{fmtDate(sess.date)}{sess.time ? " · " + sess.time : ""}</span>
+                    <span className="bd-reg-right">
+                      {sess.date === today && <span className="bd-today">Today</span>}
+                      <span className="bd-reg-count">{sess.list.length}</span>
+                    </span>
                   </div>
                   <ol className="bd-reg-list">
-                    {regByDate[date].map((s, i) => (
+                    {sess.list.map((s, i) => (
                       <li key={s.id} className="bd-reg-item">
                         <span className="bd-reg-num">{i + 1}</span>
-                        <div className="bd-reg-main">
-                          <span className="bd-reg-name">{s.name}</span>
-                          {s.at && <span className="bd-reg-when">signed up {fmtRegTime(s.at)}</span>}
-                        </div>
-                        <span className="bd-reg-start">{s.time}</span>
+                        <span className="bd-reg-name">{s.name}</span>
+                        <span className="bd-reg-when">{s.at ? fmtRegTime(s.at) : ""}</span>
                         <button onClick={() => removeSignup(s.id)} aria-label={"Remove " + s.name}><X size={14} /></button>
                       </li>
                     ))}
@@ -1306,17 +1317,18 @@ const CSS = `
 .bd-reg-form .bd-btn{margin-top:2px;}
 .bd-timepick{display:flex;gap:8px;}
 .bd-timepick select{flex:1;cursor:pointer;}
-.bd-reg-day{margin-bottom:16px;}
-.bd-reg-date{display:flex;align-items:center;gap:8px;font-family:'Barlow Semi Condensed',sans-serif;font-weight:700;font-size:15px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;}
+.bd-reg-day{background:var(--panel);border:1.5px solid var(--line);border-radius:14px;padding:4px 14px 6px;margin-bottom:12px;}
+.bd-reg-date{display:flex;align-items:center;gap:8px;font-family:'Barlow Semi Condensed',sans-serif;font-weight:700;font-size:15px;text-transform:uppercase;letter-spacing:.5px;padding:10px 0 8px;border-bottom:1.5px solid var(--line);}
+.bd-reg-slot{color:var(--ink);}
+.bd-reg-right{margin-left:auto;display:flex;align-items:center;gap:8px;}
 .bd-today{background:var(--accent);color:var(--on-accent);font-size:9px;padding:2px 7px;border-radius:20px;letter-spacing:.5px;}
-.bd-reg-count{margin-left:auto;font-family:'Inter';font-weight:600;font-size:12px;color:var(--muted);background:var(--panel-2);border-radius:20px;padding:2px 9px;}
-.bd-reg-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;}
-.bd-reg-item{display:flex;align-items:center;gap:11px;background:var(--panel);border:1.5px solid var(--line);border-radius:10px;padding:9px 11px;}
+.bd-reg-count{font-family:'Inter';font-weight:600;font-size:12px;color:var(--muted);background:var(--panel-2);border-radius:20px;padding:2px 9px;}
+.bd-reg-list{list-style:none;margin:0;padding:0;}
+.bd-reg-item{display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid var(--line);}
+.bd-reg-item:last-child{border-bottom:none;}
 .bd-reg-num{font-family:'Barlow Semi Condensed',sans-serif;font-weight:700;font-size:12px;color:var(--on-accent);background:var(--accent);width:20px;height:20px;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-.bd-reg-main{flex:1;display:flex;flex-direction:column;line-height:1.25;min-width:0;}
-.bd-reg-name{font-weight:600;font-size:14px;}
-.bd-reg-when{font-size:11px;color:var(--muted);}
-.bd-reg-start{font-family:'Barlow Semi Condensed',sans-serif;font-weight:700;font-size:13px;color:var(--accent);white-space:nowrap;}
+.bd-reg-name{flex:1;font-weight:600;font-size:14px;min-width:0;}
+.bd-reg-when{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap;}
 .bd-reg-item button{border:none;background:transparent;color:var(--muted);cursor:pointer;display:flex;padding:2px;border-radius:5px;flex-shrink:0;}
 .bd-reg-item button:hover{color:var(--clay);background:var(--clay-bg);}
 
