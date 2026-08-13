@@ -209,6 +209,8 @@ export default function App() {
 
   // No lock set -> open session (setup). Lock set -> only unlocked devices may edit.
   const canEdit = lock ? unlocked : true;
+  const activePlayers = players.filter((p) => !p.left);
+  const leftPlayers = players.filter((p) => p.left);
 
   const ask = (message, detail, onYes) => setConfirm({ message, detail, onYes });
 
@@ -404,28 +406,31 @@ export default function App() {
     nameRef.current?.focus();
   };
   const removePlayer = (id) => {
-    setPlayers((p) => p.filter((x) => x.id !== id));
-    setRounds((rs) =>
-      rs.map((r) => ({
-        ...r,
-        matches: r.matches.filter((m) => ![...m.teamA, ...m.teamB].includes(id)),
-        resting: r.resting.filter((x) => x !== id),
-      })).filter((r) => r.matches.length)
-    );
+    const hasPlayed = rounds.some((r) => r.matches.some((m) => [...m.teamA, ...m.teamB].includes(id)));
+    if (hasPlayed) {
+      // Freeze history: keep the player record so their completed matches and names
+      // stay intact; just mark them "left" so new rounds skip them.
+      setPlayers((p) => p.map((x) => (x.id === id ? { ...x, left: true } : x)));
+    } else {
+      setPlayers((p) => p.filter((x) => x.id !== id));
+      setRounds((rs) => rs.map((r) => ({ ...r, resting: r.resting.filter((x) => x !== id) })));
+    }
   };
+  const rejoinPlayer = (id) =>
+    setPlayers((p) => p.map((x) => (x.id === id ? { ...x, left: false } : x)));
   const loadLast = async () => {
     const last = await loadKey(K_ROSTER, [], true);
     if (last.length) setPlayers(last.map((nm) => ({ id: uid(), name: nm })));
   };
 
   const doStart = () => {
-    if (players.length < 4) return;
-    saveKey(K_ROSTER, players.map((x) => x.name), true);
-    setRounds((rs) => [...rs, makeRound(players, rs)]);
+    if (activePlayers.length < 4) return;
+    saveKey(K_ROSTER, activePlayers.map((x) => x.name), true);
+    setRounds((rs) => [...rs, makeRound(activePlayers, rs)]);
     setTab("matches");
   };
   const addRound = () => {
-    if (players.length < 4) return;
+    if (activePlayers.length < 4) return;
     // Starting a brand-new session with no passcode yet → prompt to set one.
     if (rounds.length === 0 && !lock) { setPass(""); setPassErr(""); setLockModal("start"); return; }
     doStart();
@@ -434,7 +439,7 @@ export default function App() {
     setRounds((rs) => {
       const prior = rs.slice(0, idx);
       const copy = rs.slice();
-      copy[idx] = makeRound(players, prior);
+      copy[idx] = makeRound(activePlayers, prior);
       return copy;
     });
   };
@@ -565,7 +570,7 @@ export default function App() {
     );
   }
 
-  const courtsThisWeek = players.length >= 4 ? Math.floor(players.length / 4) : 0;
+  const courtsThisWeek = activePlayers.length >= 4 ? Math.floor(activePlayers.length / 4) : 0;
 
   return (
     <div className="bd-wrap" data-theme={theme}>
@@ -579,7 +584,7 @@ export default function App() {
           </div>
         </div>
         <div className="bd-head-right">
-          <span className="bd-pill">{players.length} <i>in</i></span>
+          <span className="bd-pill">{activePlayers.length} <i>in</i></span>
           <button className={"bd-iconbtn" + (syncing ? " spin" : "")} onClick={reloadShared} aria-label="Sync latest scores" title="Pull the latest scores">
             <RefreshCw size={17} />
           </button>
@@ -757,7 +762,7 @@ export default function App() {
             ) : (
               <>
                 <ul className="bd-roster">
-                  {players.map((p, i) => (
+                  {activePlayers.map((p, i) => (
                     <li key={p.id} className="bd-chip">
                       <span className="bd-chip-num">{i + 1}</span>
                       <span className="bd-chip-name">{p.name}</span>
@@ -770,18 +775,36 @@ export default function App() {
                   ))}
                 </ul>
 
+                {leftPlayers.length > 0 && (
+                  <div className="bd-leftgroup">
+                    <span className="bd-leftgroup-label">Left — their finished games are kept</span>
+                    <ul className="bd-roster">
+                      {leftPlayers.map((p) => (
+                        <li key={p.id} className="bd-chip gone">
+                          <span className="bd-chip-name">{p.name}</span>
+                          {canEdit && (
+                            <button onClick={() => rejoinPlayer(p.id)} aria-label={"Bring back " + p.name} title="Bring back">
+                              <RotateCw size={14} />
+                            </button>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
                 <div className="bd-plan">
-                  {players.length < 4 ? (
-                    <p className="bd-hint warn">Add {4 - players.length} more to start doubles.</p>
+                  {activePlayers.length < 4 ? (
+                    <p className="bd-hint warn">Add {4 - activePlayers.length} more to start doubles.</p>
                   ) : (
                     <p className="bd-hint">
                       {courtsThisWeek} court{courtsThisWeek > 1 ? "s" : ""} in play
-                      {players.length % 4 !== 0 && ` · ${players.length % 4} resting each round`}
+                      {activePlayers.length % 4 !== 0 && ` · ${activePlayers.length % 4} resting each round`}
                     </p>
                   )}
                   {canEdit && (
                     <div className="bd-plan-actions">
-                      <button className="bd-btn primary" disabled={players.length < 4} onClick={addRound}>
+                      <button className="bd-btn primary" disabled={activePlayers.length < 4} onClick={addRound}>
                         <Play size={16} /> {rounds.length ? "New round" : "Start playing"}
                       </button>
                       <button
@@ -813,8 +836,8 @@ export default function App() {
                 {canEdit ? (
                   <>
                     <span>Generate a round and fresh partners are drawn automatically.</span>
-                    <button className="bd-btn primary" disabled={players.length < 4} onClick={addRound}>
-                      <Play size={16} /> {players.length < 4 ? "Add 4+ players first" : "Generate round 1"}
+                    <button className="bd-btn primary" disabled={activePlayers.length < 4} onClick={addRound}>
+                      <Play size={16} /> {activePlayers.length < 4 ? "Add 4+ players first" : "Generate round 1"}
                     </button>
                   </>
                 ) : (
@@ -1304,6 +1327,11 @@ const CSS = `
 .bd-chip-name{font-size:14px;font-weight:500;}
 .bd-chip button{border:none;background:transparent;color:var(--muted);cursor:pointer;display:flex;padding:2px;border-radius:5px;}
 .bd-chip button:hover{color:var(--clay);background:var(--clay-bg);}
+.bd-leftgroup{margin-top:14px;}
+.bd-leftgroup-label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:600;margin-bottom:8px;}
+.bd-chip.gone{opacity:.6;border-style:dashed;}
+.bd-chip.gone .bd-chip-name{text-decoration:line-through;color:var(--muted);}
+.bd-chip.gone button:hover{color:var(--accent);background:transparent;}
 
 .bd-plan{margin-top:20px;padding-top:16px;border-top:1.5px dashed var(--line);}
 .bd-plan-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
