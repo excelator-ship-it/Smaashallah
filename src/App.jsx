@@ -1321,7 +1321,7 @@ const CSS = `
 
 .bd-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px 16px 12px;max-width:640px;margin:0 auto;}
 .bd-brand{display:flex;align-items:center;gap:11px;min-width:0;}
-.bd-logo{width:52px;height:52px;border-radius:50%;overflow:hidden;background:transparent;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 1px 4px rgba(0,0,0,.18);}
+.bd-logo{width:64px;height:64px;border-radius:50%;overflow:hidden;background:transparent;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 1px 4px rgba(0,0,0,.18);}
 .bd-logo img{width:100%;height:100%;object-fit:cover;display:block;}
 .bd-brand h1{font-family:'Barlow Semi Condensed',sans-serif;font-weight:700;font-size:22px;letter-spacing:.3px;margin:0;line-height:1;text-transform:uppercase;}
 .bd-brand p{margin:3px 0 0;font-size:11.5px;color:var(--soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
