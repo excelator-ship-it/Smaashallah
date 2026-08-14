@@ -345,6 +345,26 @@ export default function App() {
 
   const nameOf = (id) => players.find((p) => p.id === id)?.name || "?";
 
+  // Share to WhatsApp: native share sheet on mobile (pick the group), wa.me on desktop.
+  const shareToWhatsApp = (text) => {
+    if (navigator.share) { navigator.share({ text }).catch(() => {}); }
+    else { window.open("https://wa.me/?text=" + encodeURIComponent(text), "_blank"); }
+  };
+  const appUrl = () => (typeof window !== "undefined" ? window.location.origin : "");
+  const shareSignup = () =>
+    shareToWhatsApp(`🏸 *Marina Smashers* — sign up for the next session 👇\n${appUrl()}`);
+  const shareStandings = () => {
+    const played = ranked.filter((r) => r.matches > 0);
+    if (!played.length) return;
+    const lines = played.map((r, i) => `${i + 1}. ${r.name} — ${r.points} pts (${r.wins}W ${r.draws}D ${r.losses}L)`);
+    let msg = `🏸 *Marina Smashers* — standings\n\n${lines.join("\n")}`;
+    const champ = played[0], spoon = played[played.length - 1];
+    msg += `\n\n👑 ${champ.name}`;
+    if (spoon && spoon.name !== champ.name) msg += `    🥄 ${spoon.name}`;
+    msg += `\n\n${appUrl()}`;
+    shareToWhatsApp(msg);
+  };
+
   const today = todayStr();
   const regSessions = useMemo(() => {
     const g = {};
@@ -695,6 +715,10 @@ export default function App() {
               {regMsg && <p className={"bd-hint" + (regMsg.includes("\u2713") ? "" : " warn")} style={{ textAlign: "center" }}>{regMsg}</p>}
             </div>
 
+            <button className="bd-btn wa wide" onClick={shareSignup}>
+              <Share2 size={16} /> Share sign-up link to WhatsApp
+            </button>
+
             {regSessions.length === 0 ? (
               <div className="bd-empty">
                 <CalendarCheck size={30} strokeWidth={1.6} />
@@ -1026,6 +1050,10 @@ export default function App() {
                   })}
                 </div>
 
+                <button className="bd-btn wa wide" onClick={shareStandings}>
+                  <Share2 size={16} /> Share results to WhatsApp
+                </button>
+
                 {canEdit && (
                   <button
                     className="bd-btn primary wide"
@@ -1317,7 +1345,7 @@ const CSS = `
 
 .bd-head{max-width:640px;margin:0 auto;padding:16px 16px 8px;}
 .bd-brand{display:flex;align-items:stretch;gap:14px;min-width:0;}
-.bd-logo{width:110px;height:110px;border-radius:16px;overflow:hidden;background:transparent;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 1px 5px rgba(0,0,0,.2);}
+.bd-logo{width:76px;height:76px;border-radius:16px;overflow:hidden;background:transparent;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 1px 5px rgba(0,0,0,.2);}
 .bd-logo img{width:100%;height:100%;object-fit:cover;display:block;}
 .bd-head-main{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:11px;}
 .bd-title{font-family:'Barlow Semi Condensed',sans-serif;font-weight:700;font-size:30px;letter-spacing:.4px;margin:0;line-height:.95;text-transform:uppercase;color:var(--ink);text-align:center;}
@@ -1359,6 +1387,8 @@ const CSS = `
 .bd-btn.ghost.danger{color:var(--clay);border-color:var(--clay-bg);}
 .bd-btn.ghost.danger:hover{background:var(--clay-bg);}
 .bd-btn.danger-solid{background:var(--clay);color:#fff;}
+.bd-btn.wa{background:#25d366;color:#08331a;}
+.bd-btn.wa:hover{background:#1fb457;}
 
 .bd-empty{text-align:center;padding:44px 20px;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:8px;}
 .bd-empty p{font-family:'Barlow Semi Condensed',sans-serif;font-weight:600;font-size:19px;color:var(--ink);margin:6px 0 0;}
