@@ -1317,7 +1317,7 @@ const CSS = `
 
 .bd-head{max-width:640px;margin:0 auto;padding:16px 16px 8px;}
 .bd-brand{display:flex;align-items:stretch;gap:14px;min-width:0;}
-.bd-logo{width:100px;height:100px;border-radius:16px;overflow:hidden;background:transparent;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 1px 5px rgba(0,0,0,.2);}
+.bd-logo{width:120px;height:120px;border-radius:16px;overflow:hidden;background:transparent;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 1px 5px rgba(0,0,0,.2);}
 .bd-logo img{width:100%;height:100%;object-fit:cover;display:block;}
 .bd-head-main{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:11px;}
 .bd-title{font-family:'Barlow Semi Condensed',sans-serif;font-weight:700;font-size:30px;letter-spacing:.4px;margin:0;line-height:.95;text-transform:uppercase;color:var(--ink);text-align:center;}
