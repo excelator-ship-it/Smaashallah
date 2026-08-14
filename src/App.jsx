@@ -212,6 +212,7 @@ export default function App() {
   const [pass, setPass] = useState("");
   const [passErr, setPassErr] = useState("");
   const [openWeek, setOpenWeek] = useState(null); // history entry id currently expanded
+  const [openSession, setOpenSession] = useState(null); // register session key expanded
   const [lightbox, setLightbox] = useState(null); // photo url being viewed full-screen
   const [uploadingKey, setUploadingKey] = useState(null); // "rIdx-mIdx" currently uploading
   const [signups, setSignups] = useState([]);
@@ -690,21 +691,6 @@ export default function App() {
         </div>
       )}
 
-      <nav className="bd-tabs">
-        {[
-          ["register", "Register", CalendarCheck],
-          ["players", "Players", Users],
-          ["matches", "Matches", Play],
-          ["board", "Standings", Trophy],
-          ["history", "History", Calendar],
-        ].map(([id, label, Icon]) => (
-          <button key={id} className={"bd-tab" + (tab === id ? " on" : "")} onClick={() => setTab(id)}>
-            <Icon size={17} strokeWidth={2.2} />
-            <span>{label}</span>
-          </button>
-        ))}
-      </nav>
-
       <main className="bd-main">
         {/* REGISTER */}
         {tab === "register" && (
@@ -750,27 +736,33 @@ export default function App() {
                 <span>Add your name, the date, and the start time to sign up for a session.</span>
               </div>
             ) : (
-              regSessions.map((sess) => (
-                <div key={sess.key} className="bd-reg-day">
-                  <div className="bd-reg-date">
-                    <span className="bd-reg-slot">{fmtDate(sess.date)}{sess.time ? " · " + sess.time : ""}</span>
-                    <span className="bd-reg-right">
-                      {sess.date === today && <span className="bd-today">Today</span>}
-                      <span className="bd-reg-count">{sess.list.length}</span>
-                    </span>
+              regSessions.map((sess) => {
+                const open = openSession === null ? sess.date === today : openSession === sess.key;
+                return (
+                  <div key={sess.key} className="bd-reg-day">
+                    <button className="bd-reg-bar" onClick={() => setOpenSession(open ? "" : sess.key)} aria-expanded={open}>
+                      <span className="bd-reg-slot">{fmtDate(sess.date)}{sess.time ? " · " + sess.time : ""}</span>
+                      <span className="bd-reg-right">
+                        {sess.date === today && <span className="bd-today">Today</span>}
+                        <span className="bd-reg-count">{sess.list.length}</span>
+                        {open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                      </span>
+                    </button>
+                    {open && (
+                      <ol className="bd-reg-list">
+                        {sess.list.map((s, i) => (
+                          <li key={s.id} className="bd-reg-item">
+                            <span className="bd-reg-num">{i + 1}</span>
+                            <span className="bd-reg-name">{s.name}</span>
+                            <span className="bd-reg-when">{s.at ? fmtRegTime(s.at) : ""}</span>
+                            <button onClick={() => removeSignup(s.id)} aria-label={"Remove " + s.name}><X size={14} /></button>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
                   </div>
-                  <ol className="bd-reg-list">
-                    {sess.list.map((s, i) => (
-                      <li key={s.id} className="bd-reg-item">
-                        <span className="bd-reg-num">{i + 1}</span>
-                        <span className="bd-reg-name">{s.name}</span>
-                        <span className="bd-reg-when">{s.at ? fmtRegTime(s.at) : ""}</span>
-                        <button onClick={() => removeSignup(s.id)} aria-label={"Remove " + s.name}><X size={14} /></button>
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-              ))
+                );
+              })
             )}
           </section>
         )}
@@ -1239,6 +1231,21 @@ export default function App() {
         )}
       </main>
 
+      <nav className="bd-tabs">
+        {[
+          ["register", "Register", CalendarCheck],
+          ["players", "Players", Users],
+          ["matches", "Matches", Play],
+          ["board", "Standings", Trophy],
+          ["history", "History", Calendar],
+        ].map(([id, label, Icon]) => (
+          <button key={id} className={"bd-tab" + (tab === id ? " on" : "")} onClick={() => setTab(id)}>
+            <Icon size={17} strokeWidth={2.2} />
+            <span>{label}</span>
+          </button>
+        ))}
+      </nav>
+
       {confirm && (
         <div className="bd-modal-bg" onClick={() => setConfirm(null)}>
           <div className="bd-modal" onClick={(e) => e.stopPropagation()}>
@@ -1392,13 +1399,13 @@ const CSS = `
 .bd-shared{max-width:640px;margin:0 auto;display:flex;align-items:center;gap:7px;padding:7px 16px;color:var(--muted);font-size:11.5px;}
 .bd-shared svg{flex-shrink:0;color:var(--accent);}
 
-.bd-tabs{display:flex;gap:5px;padding:2px 10px 8px;max-width:640px;margin:0 auto;position:sticky;top:env(safe-area-inset-top);background:var(--bg);z-index:5;}
+.bd-tabs{position:fixed;bottom:0;left:0;right:0;display:flex;gap:5px;padding:6px 10px calc(6px + env(safe-area-inset-bottom));max-width:640px;margin:0 auto;background:var(--bg);border-top:1.5px solid var(--line);z-index:20;}
 .bd-tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:9px 4px;border:none;background:transparent;cursor:pointer;color:var(--muted);font-size:11px;font-weight:600;font-family:inherit;border-radius:11px;transition:.15s;}
 .bd-tab.on{color:var(--accent);background:var(--focus);font-weight:700;box-shadow:inset 0 -2.5px 0 var(--accent);}
 .bd-tab.on svg{stroke-width:2.6;}
 .bd-tab:hover:not(.on){color:var(--soft);background:var(--panel);}
 
-.bd-main{max-width:640px;margin:0 auto;padding:16px 14px 64px;}
+.bd-main{max-width:640px;margin:0 auto;padding:16px 14px calc(84px + env(safe-area-inset-bottom));}
 
 .bd-add{display:flex;gap:8px;margin-bottom:16px;}
 .bd-input{flex:1;padding:12px 14px;border:1.5px solid var(--line);border-radius:12px;background:var(--panel);font-size:15px;font-family:inherit;color:var(--ink);outline:none;transition:.15s;}
@@ -1450,6 +1457,9 @@ const CSS = `
 .bd-timepick select{flex:1;cursor:pointer;}
 .bd-reg-day{background:var(--panel);border:1.5px solid var(--line);border-radius:14px;padding:4px 14px 6px;margin-bottom:12px;}
 .bd-reg-date{display:flex;align-items:center;gap:8px;font-family:'Barlow Semi Condensed',sans-serif;font-weight:700;font-size:15px;text-transform:uppercase;letter-spacing:.5px;padding:10px 0 8px;border-bottom:1.5px solid var(--line);}
+.bd-reg-bar{display:flex;align-items:center;gap:8px;width:100%;background:none;border:none;margin:0;padding:12px 2px;cursor:pointer;color:var(--ink);font-family:'Barlow Semi Condensed',sans-serif;font-weight:700;font-size:15px;text-transform:uppercase;letter-spacing:.5px;}
+.bd-reg-bar .bd-reg-right svg{color:var(--muted);}
+.bd-reg-day .bd-reg-list{border-top:1.5px solid var(--line);padding-top:2px;padding-bottom:4px;}
 .bd-reg-slot{color:var(--ink);}
 .bd-reg-right{margin-left:auto;display:flex;align-items:center;gap:8px;}
 .bd-today{background:var(--accent);color:var(--on-accent);font-size:9px;padding:2px 7px;border-radius:20px;letter-spacing:.5px;}
