@@ -686,11 +686,6 @@ export default function App() {
         {/* REGISTER */}
         {tab === "register" && (
           <section>
-            <div className="bd-tabtools">
-              <button className="bd-iconbtn" onClick={shareSignup} aria-label="Share sign-up link to WhatsApp" title="Share sign-up link to WhatsApp">
-                <Share2 size={18} />
-              </button>
-            </div>
             <div className="bd-reg-form">
               <div className="bd-reg-row">
                 <label>Date
@@ -714,9 +709,14 @@ export default function App() {
               <input className="bd-input" placeholder="Your name" value={reg.name}
                 onChange={(e) => { setReg({ ...reg, name: e.target.value }); setRegMsg(""); }}
                 onKeyDown={(e) => e.key === "Enter" && addSignup()} />
-              <button className="bd-btn primary wide" onClick={addSignup}>
-                <CalendarCheck size={16} /> Register
-              </button>
+              <div className="bd-cta-row">
+                <button className="bd-btn primary" onClick={addSignup}>
+                  <CalendarCheck size={16} /> Register
+                </button>
+                <button className="bd-iconbtn" onClick={shareSignup} aria-label="Share sign-up link to WhatsApp" title="Share sign-up link to WhatsApp">
+                  <Share2 size={18} />
+                </button>
+              </div>
               {regMsg && <p className={"bd-hint" + (regMsg.includes("\u2713") ? "" : " warn")} style={{ textAlign: "center" }}>{regMsg}</p>}
             </div>
 
@@ -1002,11 +1002,6 @@ export default function App() {
               </div>
             ) : (
               <>
-                <div className="bd-tabtools">
-                  <button className="bd-iconbtn" onClick={shareStandings} aria-label="Share results to WhatsApp" title="Share results to WhatsApp">
-                    <Share2 size={18} />
-                  </button>
-                </div>
                 <div className="bd-podium">
                   {(() => {
                     const champ = ranked.find((r) => r.decided > 0 && r.points === maxPts);
@@ -1056,14 +1051,19 @@ export default function App() {
                   })}
                 </div>
 
-                {canEdit && (
-                  <button
-                    className="bd-btn primary wide"
-                    onClick={() => ask("Finish and save this week?", "Saves this week's full standings to History and clears the rounds. Players stay.", finishWeek)}
-                  >
-                    <Check size={16} /> Finish & save this week
+                <div className="bd-cta-row">
+                  {canEdit && (
+                    <button
+                      className="bd-btn primary"
+                      onClick={() => ask("Close this session?", "Saves this week's full standings to History and clears the rounds. Players stay.", finishWeek)}
+                    >
+                      <Check size={16} /> Close session
+                    </button>
+                  )}
+                  <button className="bd-iconbtn" onClick={shareStandings} aria-label="Share results to WhatsApp" title="Share results to WhatsApp">
+                    <Share2 size={18} />
                   </button>
-                )}
+                </div>
               </>
             )}
           </section>
@@ -1389,7 +1389,8 @@ const CSS = `
 .bd-btn.ghost.danger{color:var(--clay);border-color:var(--clay-bg);}
 .bd-btn.ghost.danger:hover{background:var(--clay-bg);}
 .bd-btn.danger-solid{background:var(--clay);color:#fff;}
-.bd-tabtools{display:flex;justify-content:flex-end;margin-bottom:10px;}
+.bd-cta-row{display:flex;align-items:center;gap:8px;justify-content:flex-end;margin-top:6px;}
+.bd-cta-row .bd-btn{flex:1;margin-top:0;}
 
 .bd-empty{text-align:center;padding:44px 20px;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:8px;}
 .bd-empty p{font-family:'Barlow Semi Condensed',sans-serif;font-weight:600;font-size:19px;color:var(--ink);margin:6px 0 0;}
