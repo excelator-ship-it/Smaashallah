@@ -1364,6 +1364,10 @@ const CSS = `
   background:var(--bg); color:var(--ink);
   min-height:100vh; width:100%; -webkit-font-smoothing:antialiased;
   transition:background .25s,color .25s;
+  padding-top:env(safe-area-inset-top);
+  padding-left:env(safe-area-inset-left);
+  padding-right:env(safe-area-inset-right);
+  padding-bottom:env(safe-area-inset-bottom);
 }
 .bd-wrap *{box-sizing:border-box;}
 .bd-load{padding:70px 20px;text-align:center;color:var(--muted);}
@@ -1388,7 +1392,7 @@ const CSS = `
 .bd-shared{max-width:640px;margin:0 auto;display:flex;align-items:center;gap:7px;padding:7px 16px;color:var(--muted);font-size:11.5px;}
 .bd-shared svg{flex-shrink:0;color:var(--accent);}
 
-.bd-tabs{display:flex;gap:5px;padding:2px 10px 8px;max-width:640px;margin:0 auto;position:sticky;top:0;background:var(--bg);z-index:5;}
+.bd-tabs{display:flex;gap:5px;padding:2px 10px 8px;max-width:640px;margin:0 auto;position:sticky;top:env(safe-area-inset-top);background:var(--bg);z-index:5;}
 .bd-tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:9px 4px;border:none;background:transparent;cursor:pointer;color:var(--muted);font-size:11px;font-weight:600;font-family:inherit;border-radius:11px;transition:.15s;}
 .bd-tab.on{color:var(--accent);background:var(--focus);font-weight:700;box-shadow:inset 0 -2.5px 0 var(--accent);}
 .bd-tab.on svg{stroke-width:2.6;}
