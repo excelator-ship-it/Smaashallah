@@ -640,16 +640,12 @@ export default function App() {
         </div>
       </header>
 
-      <div className="bd-shared">
-        {lock && !unlocked ? <Lock size={12} /> : <Share2 size={12} />}
-        <span>
-          {lock
-            ? (unlocked
-                ? "You're the scorekeeper — everyone with the link sees your changes."
-                : "Scores are view-only — but anyone can add match photos. Enter the passcode (lock icon) to edit scores.")
-            : "Open session — set a passcode when you start so only you can edit scores. Photos stay open to all."}
-        </span>
-      </div>
+      {lock && !unlocked && (
+        <div className="bd-shared">
+          <Lock size={12} />
+          <span>Scores are view-only — anyone can add photos. Enter the passcode (lock icon) to edit scores.</span>
+        </div>
+      )}
 
       <nav className="bd-tabs">
         {[
@@ -1319,8 +1315,8 @@ const CSS = `
 .bd-wrap *{box-sizing:border-box;}
 .bd-load{padding:70px 20px;text-align:center;color:var(--muted);}
 
-.bd-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px 16px 12px;max-width:640px;margin:0 auto;}
-.bd-brand{display:flex;align-items:center;gap:11px;min-width:0;}
+.bd-head{display:flex;flex-direction:column;align-items:center;gap:12px;padding:16px 16px 10px;max-width:640px;margin:0 auto;}
+.bd-brand{display:flex;align-items:center;gap:12px;min-width:0;}
 .bd-logo{width:64px;height:64px;border-radius:50%;overflow:hidden;background:transparent;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 1px 4px rgba(0,0,0,.18);}
 .bd-logo img{width:100%;height:100%;object-fit:cover;display:block;}
 .bd-brand h1{font-family:'Barlow Semi Condensed',sans-serif;font-weight:700;font-size:22px;letter-spacing:.3px;margin:0;line-height:1;text-transform:uppercase;}
@@ -1338,10 +1334,11 @@ const CSS = `
 .bd-shared{max-width:640px;margin:0 auto;display:flex;align-items:center;gap:7px;padding:7px 16px;color:var(--muted);font-size:11.5px;}
 .bd-shared svg{flex-shrink:0;color:var(--accent);}
 
-.bd-tabs{display:flex;gap:4px;padding:2px 12px 0;max-width:640px;margin:0 auto;position:sticky;top:0;background:var(--bg);z-index:5;}
-.bd-tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 4px;border:none;background:transparent;cursor:pointer;color:var(--muted);font-size:11px;font-weight:600;font-family:inherit;border-bottom:2.5px solid transparent;transition:.15s;}
-.bd-tab.on{color:var(--accent);border-bottom-color:var(--accent);}
-.bd-tab:hover{color:var(--soft);}
+.bd-tabs{display:flex;gap:5px;padding:2px 10px 8px;max-width:640px;margin:0 auto;position:sticky;top:0;background:var(--bg);z-index:5;}
+.bd-tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:9px 4px;border:none;background:transparent;cursor:pointer;color:var(--muted);font-size:11px;font-weight:600;font-family:inherit;border-radius:11px;transition:.15s;}
+.bd-tab.on{color:var(--accent);background:var(--focus);font-weight:700;box-shadow:inset 0 -2.5px 0 var(--accent);}
+.bd-tab.on svg{stroke-width:2.6;}
+.bd-tab:hover:not(.on){color:var(--soft);background:var(--panel);}
 
 .bd-main{max-width:640px;margin:0 auto;padding:16px 14px 64px;}
 
