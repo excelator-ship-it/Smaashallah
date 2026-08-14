@@ -207,7 +207,7 @@ async function saveKey(key, value, shared) {
 /* ---------------- component ---------------- */
 
 export default function App() {
-  const [tab, setTabState] = useState(() => tabFromHash() || "players");
+  const [tab, setTabState] = useState(() => tabFromHash() || "register");
   const [players, setPlayers] = useState([]);
   const [rounds, setRounds] = useState([]);
   const [history, setHistory] = useState([]);
@@ -237,6 +237,7 @@ export default function App() {
   const [nameDraft, setNameDraft] = useState("");
   const [nameEditing, setNameEditing] = useState(false);
   const [addTimeOpen, setAddTimeOpen] = useState(false);
+  const [addNameDraft, setAddNameDraft] = useState("");
   const [prevSnap, setPrevSnap] = useState(null); // last session before a destructive change
   const nameRef = useRef(null);
   const saveTimer = useRef(null);
@@ -318,7 +319,7 @@ export default function App() {
       setSignups(su || []);
       setPrevSnap(await loadKey(K_SESSION_PREV, null, true));
       setLoaded(true);
-      if (!tabFromHash() && (s.rounds || []).length) setTab("matches");
+      // default landing tab is Register (set above); a URL hash still wins.
     })();
   }, []);
 
@@ -466,6 +467,14 @@ export default function App() {
     if (v) localStorage.setItem("ms_name", v); else localStorage.removeItem("ms_name");
     setNameEditing(false);
     setRegMsg("");
+  };
+  const addOther = async (date, time) => {
+    const nm = addNameDraft.trim();
+    if (!nm) return;
+    const res = await addSignupEntry(date, time, nm);
+    if (res === "dup") setRegMsg(`${nm} is already on that list.`);
+    else if (res) { setAddNameDraft(""); setRegMsg(`Added ${nm} \u2713`); }
+    else setRegMsg("Couldn't add that name.");
   };
   const toggleJoin = async (date, time) => {
     const nm = myName.trim();
@@ -785,7 +794,7 @@ export default function App() {
               return (
                 <div key={sess.key} className="bd-reg-day">
                   <div className="bd-reg-head">
-                    <button className="bd-reg-bar" onClick={() => setOpenSession(open ? null : sess.key)} aria-expanded={open}>
+                    <button className="bd-reg-bar" onClick={() => { setOpenSession(open ? null : sess.key); setAddNameDraft(""); setRegMsg(""); }} aria-expanded={open}>
                       <span className="bd-reg-slot">{fmtDate(sess.date)} · {sess.time}</span>
                       <span className="bd-reg-right">
                         {sess.date === today && <span className="bd-today">Today</span>}
@@ -798,20 +807,30 @@ export default function App() {
                     </button>
                   </div>
                   {open && (
-                    sess.list.length ? (
-                      <ol className="bd-reg-list">
-                        {sess.list.map((s, i) => (
-                          <li key={s.id} className="bd-reg-item">
-                            <span className="bd-reg-num">{i + 1}</span>
-                            <span className="bd-reg-name">{s.name}</span>
-                            <span className="bd-reg-when">{s.at ? fmtRegTime(s.at) : ""}</span>
-                            <button onClick={() => removeSignup(s.id)} aria-label={"Remove " + s.name}><X size={14} /></button>
-                          </li>
-                        ))}
-                      </ol>
-                    ) : (
-                      <p className="bd-reg-none">No one yet — tap Join to be first.</p>
-                    )
+                    <>
+                      {sess.list.length ? (
+                        <ol className="bd-reg-list">
+                          {sess.list.map((s, i) => (
+                            <li key={s.id} className="bd-reg-item">
+                              <span className="bd-reg-num">{i + 1}</span>
+                              <span className="bd-reg-name">{s.name}</span>
+                              <span className="bd-reg-when">{s.at ? fmtRegTime(s.at) : ""}</span>
+                              <button onClick={() => removeSignup(s.id)} aria-label={"Remove " + s.name}><X size={14} /></button>
+                            </li>
+                          ))}
+                        </ol>
+                      ) : (
+                        <p className="bd-reg-none">No one yet — tap Join, or add someone below.</p>
+                      )}
+                      <div className="bd-addname">
+                        <input className="bd-input" placeholder="Add someone else…" value={addNameDraft}
+                          onChange={(e) => setAddNameDraft(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && addOther(sess.date, sess.time)} />
+                        <button className="bd-btn primary square" disabled={!addNameDraft.trim()} onClick={() => addOther(sess.date, sess.time)} aria-label="Add name">
+                          <Plus size={18} />
+                        </button>
+                      </div>
+                    </>
                   )}
                 </div>
               );
@@ -1540,7 +1559,7 @@ const CSS = `
 .bd-reg-bar{display:flex;align-items:center;gap:8px;width:100%;background:none;border:none;margin:0;padding:12px 2px;cursor:pointer;color:var(--ink);font-family:'Barlow Semi Condensed',sans-serif;font-weight:700;font-size:15px;text-transform:uppercase;letter-spacing:.5px;}
 .bd-reg-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
 .bd-reg-h{font-family:'Barlow Semi Condensed',sans-serif;font-weight:700;font-size:18px;text-transform:uppercase;letter-spacing:.5px;}
-.bd-namecard{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--panel);border:1.5px solid var(--line);border-radius:12px;padding:11px 13px;margin-bottom:6px;font-size:14px;}
+.bd-namecard{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--panel);border:1.5px solid var(--line);border-radius:12px;padding:11px 13px;margin-bottom:18px;font-size:14px;}
 .bd-namecard.editing{gap:8px;}
 .bd-namecard.editing .bd-input{flex:1;margin:0;}
 .bd-namecard .bd-btn{flex-shrink:0;}
@@ -1550,6 +1569,8 @@ const CSS = `
 .bd-join:hover{background:var(--focus);}
 .bd-join.in{background:var(--accent);color:var(--on-accent);border-color:var(--accent);}
 .bd-reg-none{color:var(--muted);font-size:13px;padding:4px 2px 10px;border-top:1.5px solid var(--line);margin:0;}
+.bd-addname{display:flex;gap:8px;padding:8px 2px 4px;}
+.bd-addname .bd-input{flex:1;margin:0;}
 .bd-reg-bar .bd-reg-right svg{color:var(--muted);}
 .bd-reg-day .bd-reg-list{border-top:1.5px solid var(--line);padding-top:2px;padding-bottom:4px;}
 .bd-reg-slot{color:var(--ink);}
