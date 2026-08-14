@@ -1559,7 +1559,7 @@ const CSS = `
 .bd-reg-bar{display:flex;align-items:center;gap:8px;width:100%;background:none;border:none;margin:0;padding:12px 2px;cursor:pointer;color:var(--ink);font-family:'Barlow Semi Condensed',sans-serif;font-weight:700;font-size:15px;text-transform:uppercase;letter-spacing:.5px;}
 .bd-reg-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
 .bd-reg-h{font-family:'Barlow Semi Condensed',sans-serif;font-weight:700;font-size:18px;text-transform:uppercase;letter-spacing:.5px;}
-.bd-namecard{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--panel);border:1.5px solid var(--line);border-radius:12px;padding:11px 13px;margin-bottom:18px;font-size:14px;}
+.bd-namecard{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--panel);border:1.5px solid var(--line);border-radius:12px;padding:11px 13px;margin-bottom:30px;font-size:14px;}
 .bd-namecard.editing{gap:8px;}
 .bd-namecard.editing .bd-input{flex:1;margin:0;}
 .bd-namecard .bd-btn{flex-shrink:0;}
