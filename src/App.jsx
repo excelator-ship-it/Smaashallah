@@ -686,6 +686,11 @@ export default function App() {
         {/* REGISTER */}
         {tab === "register" && (
           <section>
+            <div className="bd-tabtools">
+              <button className="bd-iconbtn" onClick={shareSignup} aria-label="Share sign-up link to WhatsApp" title="Share sign-up link to WhatsApp">
+                <Share2 size={18} />
+              </button>
+            </div>
             <div className="bd-reg-form">
               <div className="bd-reg-row">
                 <label>Date
@@ -714,10 +719,6 @@ export default function App() {
               </button>
               {regMsg && <p className={"bd-hint" + (regMsg.includes("\u2713") ? "" : " warn")} style={{ textAlign: "center" }}>{regMsg}</p>}
             </div>
-
-            <button className="bd-btn wa wide" onClick={shareSignup}>
-              <Share2 size={16} /> Share sign-up link to WhatsApp
-            </button>
 
             {regSessions.length === 0 ? (
               <div className="bd-empty">
@@ -1001,6 +1002,11 @@ export default function App() {
               </div>
             ) : (
               <>
+                <div className="bd-tabtools">
+                  <button className="bd-iconbtn" onClick={shareStandings} aria-label="Share results to WhatsApp" title="Share results to WhatsApp">
+                    <Share2 size={18} />
+                  </button>
+                </div>
                 <div className="bd-podium">
                   {(() => {
                     const champ = ranked.find((r) => r.decided > 0 && r.points === maxPts);
@@ -1049,10 +1055,6 @@ export default function App() {
                     );
                   })}
                 </div>
-
-                <button className="bd-btn wa wide" onClick={shareStandings}>
-                  <Share2 size={16} /> Share results to WhatsApp
-                </button>
 
                 {canEdit && (
                   <button
@@ -1387,8 +1389,7 @@ const CSS = `
 .bd-btn.ghost.danger{color:var(--clay);border-color:var(--clay-bg);}
 .bd-btn.ghost.danger:hover{background:var(--clay-bg);}
 .bd-btn.danger-solid{background:var(--clay);color:#fff;}
-.bd-btn.wa{background:#25d366;color:#08331a;}
-.bd-btn.wa:hover{background:#1fb457;}
+.bd-tabtools{display:flex;justify-content:flex-end;margin-bottom:10px;}
 
 .bd-empty{text-align:center;padding:44px 20px;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:8px;}
 .bd-empty p{font-family:'Barlow Semi Condensed',sans-serif;font-weight:600;font-size:19px;color:var(--ink);margin:6px 0 0;}
