@@ -168,6 +168,21 @@ const tabFromHash = () => {
   return SLUG_TABS[(window.location.hash || "").replace(/^#/, "").toLowerCase()] || null;
 };
 
+// Recurring weekly sessions (getDay: 0=Sun … 6=Sat)
+const SCHEDULE = [
+  { dow: 2, time: "8 PM" },   // Tuesday
+  { dow: 4, time: "8 PM" },   // Thursday
+  { dow: 6, time: "10 AM" },  // Saturday
+  { dow: 0, time: "10 AM" },  // Sunday
+];
+const timeMinutes = (t) => {
+  if (!t) return 0;
+  const [h, ap] = t.split(" ");
+  let hh = Number(h) % 12;
+  if ((ap || "").toUpperCase() === "PM") hh += 12;
+  return hh * 60;
+};
+
 // shared === true  -> group database (Supabase), synced across all devices
 // shared === false -> this device only (localStorage), e.g. the theme choice
 async function loadKey(key, fallback, shared) {
@@ -218,6 +233,10 @@ export default function App() {
   const [signups, setSignups] = useState([]);
   const [reg, setReg] = useState({ date: todayStr(), hour: "7", ap: "PM", name: "" });
   const [regMsg, setRegMsg] = useState("");
+  const [myName, setMyName] = useState(() => (typeof window !== "undefined" ? localStorage.getItem("ms_name") || "" : ""));
+  const [nameDraft, setNameDraft] = useState("");
+  const [nameEditing, setNameEditing] = useState(false);
+  const [addTimeOpen, setAddTimeOpen] = useState(false);
   const [prevSnap, setPrevSnap] = useState(null); // last session before a destructive change
   const nameRef = useRef(null);
   const saveTimer = useRef(null);
@@ -390,25 +409,38 @@ export default function App() {
   };
 
   const today = todayStr();
-  const regSessions = useMemo(() => {
-    const g = {};
+  // Auto-generate the next several standard sessions from the recurring schedule.
+  const upcomingSessions = useMemo(() => {
+    const out = [];
+    const now = new Date();
+    for (let i = 0; i < 28 && out.length < 8; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
+      const slot = SCHEDULE.find((s) => s.dow === d.getDay());
+      if (!slot) continue;
+      const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      out.push({ date: iso, time: slot.time, key: iso + "|" + slot.time });
+    }
+    return out;
+  }, [today]);
+
+  // Merge auto sessions with any one-off sessions that already have sign-ups (today or later).
+  const sessionsToShow = useMemo(() => {
+    const map = new Map();
+    upcomingSessions.forEach((s) => map.set(s.key, { date: s.date, time: s.time, key: s.key }));
     signups.forEach((s) => {
       const key = s.date + "|" + (s.time || "");
-      if (!g[key]) g[key] = { key, date: s.date, time: s.time || "", list: [] };
-      g[key].list.push(s);
+      if (s.date >= today && !map.has(key)) map.set(key, { date: s.date, time: s.time || "", key });
     });
-    const arr = Object.values(g);
-    arr.forEach((sess) => sess.list.sort((a, b) => (a.at || "").localeCompare(b.at || "")));
-    const tmin = (t) => {
-      if (!t) return 0;
-      const [h, ap] = t.split(" ");
-      let hh = Number(h) % 12;
-      if ((ap || "").toUpperCase() === "PM") hh += 12;
-      return hh * 60;
-    };
-    arr.sort((a, b) => a.date.localeCompare(b.date) || tmin(a.time) - tmin(b.time));
+    const arr = [...map.values()];
+    arr.forEach((sess) => {
+      sess.list = signups
+        .filter((x) => x.date === sess.date && x.time === sess.time)
+        .sort((a, b) => (a.at || "").localeCompare(b.at || ""));
+    });
+    arr.sort((a, b) => a.date.localeCompare(b.date) || timeMinutes(a.time) - timeMinutes(b.time));
     return arr;
-  }, [signups]);
+  }, [upcomingSessions, signups, today]);
+
   const todaySignups = useMemo(() => {
     const seen = new Set(), out = [];
     signups.filter((s) => s.date === today).forEach((s) => {
@@ -417,6 +449,37 @@ export default function App() {
     });
     return out;
   }, [signups, today]);
+
+  const addSignupEntry = async (date, time, name) => {
+    const nm = (name || "").trim();
+    if (!nm || !date || !time) return false;
+    const latest = await loadKey(K_SIGNUPS, signups, true);
+    if (latest.some((s) => s.name.toLowerCase() === nm.toLowerCase() && s.date === date && s.time === time)) return "dup";
+    const next = [...latest, { id: uid(), date, time, name: nm, at: new Date().toISOString() }];
+    setSignups(next);
+    await saveKey(K_SIGNUPS, next, true);
+    return true;
+  };
+  const saveMyName = (nm) => {
+    const v = (nm || "").trim();
+    setMyName(v);
+    if (v) localStorage.setItem("ms_name", v); else localStorage.removeItem("ms_name");
+    setNameEditing(false);
+    setRegMsg("");
+  };
+  const toggleJoin = async (date, time) => {
+    const nm = myName.trim();
+    if (!nm) { setNameEditing(true); setNameDraft(""); setRegMsg("Add your name first."); return; }
+    const mine = signups.find((s) => s.name.toLowerCase() === nm.toLowerCase() && s.date === date && s.time === time);
+    if (mine) await removeSignup(mine.id);
+    else await addSignupEntry(date, time, nm);
+  };
+  const addOneOff = async () => {
+    const ok = await addSignupEntry(reg.date, `${reg.hour} ${reg.ap}`, myName);
+    if (ok === "dup") setRegMsg("You're already on that one.");
+    else if (ok) { setRegMsg("Added \u2713"); setAddTimeOpen(false); }
+    else setRegMsg("Set your name and a date first.");
+  };
 
   const addSignup = async () => {
     const name = reg.name.trim();
@@ -657,7 +720,6 @@ export default function App() {
           <div className="bd-head-main">
             <h1 className="bd-title">Marina Smashers</h1>
             <div className="bd-head-right">
-              <span className="bd-pill">{activePlayers.length} <i>in</i></span>
               <button className={"bd-iconbtn" + (syncing ? " spin" : "")} onClick={reloadShared} aria-label="Sync latest scores" title="Pull the latest scores">
                 <RefreshCw size={17} />
               </button>
@@ -695,60 +757,48 @@ export default function App() {
         {/* REGISTER */}
         {tab === "register" && (
           <section>
-            <div className="bd-reg-form">
-              <div className="bd-reg-row">
-                <label>Date
-                  <input type="date" className="bd-input" value={reg.date}
-                    onChange={(e) => { setReg({ ...reg, date: e.target.value }); setRegMsg(""); }} />
-                </label>
-                <label>Start time
-                  <div className="bd-timepick">
-                    <select className="bd-input" value={reg.hour}
-                      onChange={(e) => { setReg({ ...reg, hour: e.target.value }); setRegMsg(""); }}>
-                      {Array.from({ length: 12 }, (_, i) => String(i + 1)).map((h) => <option key={h} value={h}>{h}</option>)}
-                    </select>
-                    <select className="bd-input" value={reg.ap}
-                      onChange={(e) => { setReg({ ...reg, ap: e.target.value }); setRegMsg(""); }}>
-                      <option value="AM">AM</option>
-                      <option value="PM">PM</option>
-                    </select>
-                  </div>
-                </label>
-              </div>
-              <input className="bd-input" placeholder="Your name" value={reg.name}
-                onChange={(e) => { setReg({ ...reg, name: e.target.value }); setRegMsg(""); }}
-                onKeyDown={(e) => e.key === "Enter" && addSignup()} />
-              <div className="bd-cta-row">
-                <button className="bd-btn primary" onClick={addSignup}>
-                  <CalendarCheck size={16} /> Register
-                </button>
-                <button className="bd-iconbtn" onClick={shareSignup} aria-label="Share sign-up link to WhatsApp" title="Share sign-up link to WhatsApp">
-                  <Share2 size={18} />
-                </button>
-              </div>
-              {regMsg && <p className={"bd-hint" + (regMsg.includes("\u2713") ? "" : " warn")} style={{ textAlign: "center" }}>{regMsg}</p>}
+            <div className="bd-reg-top">
+              <span className="bd-reg-h">Upcoming sessions</span>
+              <button className="bd-iconbtn" onClick={shareSignup} aria-label="Share sign-up link to WhatsApp" title="Share sign-up link to WhatsApp">
+                <Share2 size={18} />
+              </button>
             </div>
 
-            {regSessions.length === 0 ? (
-              <div className="bd-empty">
-                <CalendarCheck size={30} strokeWidth={1.6} />
-                <p>No sign-ups yet</p>
-                <span>Add your name, the date, and the start time to sign up for a session.</span>
+            {myName && !nameEditing ? (
+              <div className="bd-namecard">
+                <span>Signing up as <b>{myName}</b></span>
+                <button className="bd-mini" onClick={() => { setNameDraft(myName); setNameEditing(true); }}>Change</button>
               </div>
             ) : (
-              regSessions.map((sess) => {
-                const open = openSession === null ? sess.date === today : openSession === sess.key;
-                return (
-                  <div key={sess.key} className="bd-reg-day">
-                    <button className="bd-reg-bar" onClick={() => setOpenSession(open ? "" : sess.key)} aria-expanded={open}>
-                      <span className="bd-reg-slot">{fmtDate(sess.date)}{sess.time ? " · " + sess.time : ""}</span>
+              <div className="bd-namecard editing">
+                <input className="bd-input" placeholder="Your name" value={nameDraft} autoFocus
+                  onChange={(e) => setNameDraft(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && nameDraft.trim() && saveMyName(nameDraft)} />
+                <button className="bd-btn primary" disabled={!nameDraft.trim()} onClick={() => saveMyName(nameDraft)}>Save</button>
+              </div>
+            )}
+            {regMsg && <p className={"bd-hint" + (regMsg.includes("\u2713") ? "" : " warn")} style={{ margin: "4px 2px 10px" }}>{regMsg}</p>}
+
+            {sessionsToShow.map((sess) => {
+              const open = openSession === sess.key;
+              const mine = myName && sess.list.some((s) => s.name.toLowerCase() === myName.trim().toLowerCase());
+              return (
+                <div key={sess.key} className="bd-reg-day">
+                  <div className="bd-reg-head">
+                    <button className="bd-reg-bar" onClick={() => setOpenSession(open ? null : sess.key)} aria-expanded={open}>
+                      <span className="bd-reg-slot">{fmtDate(sess.date)} · {sess.time}</span>
                       <span className="bd-reg-right">
                         {sess.date === today && <span className="bd-today">Today</span>}
-                        <span className="bd-reg-count">{sess.list.length}</span>
+                        <span className="bd-reg-count"><Users size={12} /> {sess.list.length}</span>
                         {open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                       </span>
                     </button>
-                    {open && (
+                    <button className={"bd-join" + (mine ? " in" : "")} onClick={() => toggleJoin(sess.date, sess.time)}>
+                      {mine ? <><Check size={15} /> Going</> : "Join"}
+                    </button>
+                  </div>
+                  {open && (
+                    sess.list.length ? (
                       <ol className="bd-reg-list">
                         {sess.list.map((s, i) => (
                           <li key={s.id} className="bd-reg-item">
@@ -759,10 +809,40 @@ export default function App() {
                           </li>
                         ))}
                       </ol>
-                    )}
-                  </div>
-                );
-              })
+                    ) : (
+                      <p className="bd-reg-none">No one yet — tap Join to be first.</p>
+                    )
+                  )}
+                </div>
+              );
+            })}
+
+            <button className="bd-btn ghost wide" onClick={() => { setAddTimeOpen((v) => !v); setRegMsg(""); }}>
+              <Plus size={15} /> Add a one-off session {addTimeOpen ? "▲" : "▼"}
+            </button>
+            {addTimeOpen && (
+              <div className="bd-reg-form" style={{ marginTop: 10 }}>
+                <div className="bd-reg-row">
+                  <label>Date
+                    <input type="date" className="bd-input" value={reg.date}
+                      onChange={(e) => setReg({ ...reg, date: e.target.value })} />
+                  </label>
+                  <label>Start time
+                    <div className="bd-timepick">
+                      <select className="bd-input" value={reg.hour} onChange={(e) => setReg({ ...reg, hour: e.target.value })}>
+                        {Array.from({ length: 12 }, (_, i) => String(i + 1)).map((h) => <option key={h} value={h}>{h}</option>)}
+                      </select>
+                      <select className="bd-input" value={reg.ap} onChange={(e) => setReg({ ...reg, ap: e.target.value })}>
+                        <option value="AM">AM</option>
+                        <option value="PM">PM</option>
+                      </select>
+                    </div>
+                  </label>
+                </div>
+                <button className="bd-btn primary wide" onClick={addOneOff}>
+                  <CalendarCheck size={16} /> {myName ? `Add me (${myName})` : "Add your name first"}
+                </button>
+              </div>
             )}
           </section>
         )}
@@ -1458,12 +1538,24 @@ const CSS = `
 .bd-reg-day{background:var(--panel);border:1.5px solid var(--line);border-radius:14px;padding:4px 14px 6px;margin-bottom:12px;}
 .bd-reg-date{display:flex;align-items:center;gap:8px;font-family:'Barlow Semi Condensed',sans-serif;font-weight:700;font-size:15px;text-transform:uppercase;letter-spacing:.5px;padding:10px 0 8px;border-bottom:1.5px solid var(--line);}
 .bd-reg-bar{display:flex;align-items:center;gap:8px;width:100%;background:none;border:none;margin:0;padding:12px 2px;cursor:pointer;color:var(--ink);font-family:'Barlow Semi Condensed',sans-serif;font-weight:700;font-size:15px;text-transform:uppercase;letter-spacing:.5px;}
+.bd-reg-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.bd-reg-h{font-family:'Barlow Semi Condensed',sans-serif;font-weight:700;font-size:18px;text-transform:uppercase;letter-spacing:.5px;}
+.bd-namecard{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--panel);border:1.5px solid var(--line);border-radius:12px;padding:11px 13px;margin-bottom:6px;font-size:14px;}
+.bd-namecard.editing{gap:8px;}
+.bd-namecard.editing .bd-input{flex:1;margin:0;}
+.bd-namecard .bd-btn{flex-shrink:0;}
+.bd-reg-head{display:flex;align-items:center;gap:8px;}
+.bd-reg-head .bd-reg-bar{flex:1;}
+.bd-join{flex-shrink:0;display:inline-flex;align-items:center;gap:5px;border:1.5px solid var(--accent);background:transparent;color:var(--accent);font-family:inherit;font-weight:700;font-size:13px;border-radius:20px;padding:7px 16px;cursor:pointer;transition:.15s;}
+.bd-join:hover{background:var(--focus);}
+.bd-join.in{background:var(--accent);color:var(--on-accent);border-color:var(--accent);}
+.bd-reg-none{color:var(--muted);font-size:13px;padding:4px 2px 10px;border-top:1.5px solid var(--line);margin:0;}
 .bd-reg-bar .bd-reg-right svg{color:var(--muted);}
 .bd-reg-day .bd-reg-list{border-top:1.5px solid var(--line);padding-top:2px;padding-bottom:4px;}
 .bd-reg-slot{color:var(--ink);}
 .bd-reg-right{margin-left:auto;display:flex;align-items:center;gap:8px;}
 .bd-today{background:var(--accent);color:var(--on-accent);font-size:9px;padding:2px 7px;border-radius:20px;letter-spacing:.5px;}
-.bd-reg-count{font-family:'Inter';font-weight:600;font-size:12px;color:var(--muted);background:var(--panel-2);border-radius:20px;padding:2px 9px;}
+.bd-reg-count{display:inline-flex;align-items:center;gap:4px;font-family:'Inter';font-weight:600;font-size:12px;color:var(--muted);background:var(--panel-2);border-radius:20px;padding:3px 10px;}
 .bd-reg-list{list-style:none;margin:0;padding:0;}
 .bd-reg-item{display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid var(--line);}
 .bd-reg-item:last-child{border-bottom:none;}
