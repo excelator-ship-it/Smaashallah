@@ -160,6 +160,14 @@ const fmtWhen = (iso) => {
   catch { return ""; }
 };
 
+// Each tab has its own shareable URL hash, e.g. .../#register, .../#standings
+const TAB_SLUGS = { register: "register", players: "players", matches: "matches", board: "standings", history: "history" };
+const SLUG_TABS = { register: "register", players: "players", matches: "matches", standings: "board", history: "history" };
+const tabFromHash = () => {
+  if (typeof window === "undefined") return null;
+  return SLUG_TABS[(window.location.hash || "").replace(/^#/, "").toLowerCase()] || null;
+};
+
 // shared === true  -> group database (Supabase), synced across all devices
 // shared === false -> this device only (localStorage), e.g. the theme choice
 async function loadKey(key, fallback, shared) {
@@ -184,7 +192,7 @@ async function saveKey(key, value, shared) {
 /* ---------------- component ---------------- */
 
 export default function App() {
-  const [tab, setTab] = useState("players");
+  const [tab, setTabState] = useState(() => tabFromHash() || "players");
   const [players, setPlayers] = useState([]);
   const [rounds, setRounds] = useState([]);
   const [history, setHistory] = useState([]);
@@ -212,6 +220,21 @@ export default function App() {
   const [prevSnap, setPrevSnap] = useState(null); // last session before a destructive change
   const nameRef = useRef(null);
   const saveTimer = useRef(null);
+
+  // Switch tab and reflect it in the URL (so it's shareable / deep-linkable).
+  const setTab = (t) => {
+    setTabState(t);
+    const slug = TAB_SLUGS[t];
+    if (slug && window.location.hash.replace(/^#/, "") !== slug) {
+      window.history.pushState(null, "", "#" + slug);
+    }
+  };
+  useEffect(() => {
+    const sync = () => { const t = tabFromHash(); if (t) setTabState(t); };
+    window.addEventListener("popstate", sync);
+    window.addEventListener("hashchange", sync);
+    return () => { window.removeEventListener("popstate", sync); window.removeEventListener("hashchange", sync); };
+  }, []);
 
   // No lock set -> open session (setup). Lock set -> only unlocked devices may edit.
   const canEdit = lock ? unlocked : true;
@@ -275,7 +298,7 @@ export default function App() {
       setSignups(su || []);
       setPrevSnap(await loadKey(K_SESSION_PREV, null, true));
       setLoaded(true);
-      if ((s.rounds || []).length) setTab("matches");
+      if (!tabFromHash() && (s.rounds || []).length) setTab("matches");
     })();
   }, []);
 
@@ -352,7 +375,7 @@ export default function App() {
   };
   const appUrl = () => (typeof window !== "undefined" ? window.location.origin : "");
   const shareSignup = () =>
-    shareToWhatsApp(`🏸 *Marina Smashers* — sign up for the next session 👇\n${appUrl()}`);
+    shareToWhatsApp(`🏸 *Marina Smashers* — sign up for the next session 👇\n${appUrl()}/#register`);
   const shareStandings = () => {
     const played = ranked.filter((r) => r.matches > 0);
     if (!played.length) return;
