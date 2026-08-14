@@ -413,7 +413,7 @@ export default function App() {
   const upcomingSessions = useMemo(() => {
     const out = [];
     const now = new Date();
-    for (let i = 0; i < 28 && out.length < 8; i++) {
+    for (let i = 0; i < 28 && out.length < 4; i++) {
       const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
       const slot = SCHEDULE.find((s) => s.dow === d.getDay());
       if (!slot) continue;
@@ -438,7 +438,7 @@ export default function App() {
         .sort((a, b) => (a.at || "").localeCompare(b.at || ""));
     });
     arr.sort((a, b) => a.date.localeCompare(b.date) || timeMinutes(a.time) - timeMinutes(b.time));
-    return arr;
+    return arr.slice(0, 3);
   }, [upcomingSessions, signups, today]);
 
   const todaySignups = useMemo(() => {
