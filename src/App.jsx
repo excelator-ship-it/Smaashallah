@@ -133,6 +133,7 @@ const K_ROSTER = "badminton:roster:v3";
 const K_LOCK = "badminton:lock:v3";      // shared: { hash } | null — the session passcode
 const K_SIGNUPS = "badminton:signups:v3"; // shared: [{ id, date, time, name }]
 const K_SESSION_PREV = "badminton:session:prev:v3"; // shared: last session before a destructive change
+const K_BOOKINGS = "badminton:bookings:v3"; // shared: { "date|time": { booked, photo:{url,path}, at } }
 const K_THEME = "badminton:theme:v3";    // personal
 const UNLOCK_KEY = "badminton:unlockHash"; // per-device: hash this device has unlocked
 const MAX_PHOTOS = 4;                       // per-match photo cap (protects the free storage tier)
@@ -181,6 +182,17 @@ const timeMinutes = (t) => {
   let hh = Number(h) % 12;
   if ((ap || "").toUpperCase() === "PM") hh += 12;
   return hh * 60;
+};
+
+// Courts: 1 court holds 5. A 2nd court opens once 8 sign up. Hard cap 10 (2 courts).
+const COURT_CAP = 5;
+const SECOND_COURT_AT = 8;
+const TOTAL_CAP = 10;
+const courtInfo = (n) => {
+  const courts = n >= SECOND_COURT_AT ? 2 : 1;
+  const capacity = courts * COURT_CAP;
+  const confirmed = Math.min(n, capacity);
+  return { courts, capacity, confirmed, waitlisted: Math.max(0, n - confirmed) };
 };
 
 // shared === true  -> group database (Supabase), synced across all devices
@@ -238,6 +250,8 @@ export default function App() {
   const [nameEditing, setNameEditing] = useState(false);
   const [addTimeOpen, setAddTimeOpen] = useState(false);
   const [addNameDraft, setAddNameDraft] = useState("");
+  const [bookings, setBookings] = useState({});
+  const [bookingBusy, setBookingBusy] = useState(null); // session key currently uploading
   const [prevSnap, setPrevSnap] = useState(null); // last session before a destructive change
   const nameRef = useRef(null);
   const saveTimer = useRef(null);
@@ -318,6 +332,7 @@ export default function App() {
       const su = await loadKey(K_SIGNUPS, [], true);
       setSignups(su || []);
       setPrevSnap(await loadKey(K_SESSION_PREV, null, true));
+      setBookings((await loadKey(K_BOOKINGS, {}, true)) || {});
       setLoaded(true);
       // default landing tab is Register (set above); a URL hash still wins.
     })();
@@ -346,6 +361,7 @@ export default function App() {
     setUnlocked(lk ? localStorage.getItem(UNLOCK_KEY) === lk.hash : false);
     setSignups((await loadKey(K_SIGNUPS, signups, true)) || []);
     setPrevSnap(await loadKey(K_SESSION_PREV, prevSnap, true));
+    setBookings((await loadKey(K_BOOKINGS, bookings, true)) || {});
     setTimeout(() => setSyncing(false), 450);
   };
   useEffect(() => {
@@ -475,6 +491,37 @@ export default function App() {
     if (res === "dup") setRegMsg(`${nm} is already on that list.`);
     else if (res) { setAddNameDraft(""); setRegMsg(`Added ${nm} \u2713`); }
     else setRegMsg("Couldn't add that name.");
+  };
+  // Court booking (per session key "date|time"), merge-safe so it won't clobber others.
+  const writeBooking = async (key, patch) => {
+    const latest = (await loadKey(K_BOOKINGS, bookings, true)) || {};
+    const next = { ...latest, [key]: { ...(latest[key] || {}), ...patch } };
+    if (patch === null) delete next[key];
+    setBookings(next);
+    await saveKey(K_BOOKINGS, next, true);
+  };
+  const toggleBooked = (key) => {
+    const cur = bookings[key] || {};
+    writeBooking(key, { booked: !cur.booked });
+  };
+  const uploadBooking = async (key, file) => {
+    if (!file) return;
+    setBookingBusy(key);
+    try {
+      const photo = await uploadPhoto(file, "court");
+      await writeBooking(key, { booked: true, photo, at: new Date().toISOString() });
+    } catch (e) {
+      alert("Couldn't upload the screenshot. Check the storage bucket is set up, then try again.");
+    }
+    setBookingBusy(null);
+  };
+  const clearBooking = async (key) => {
+    const ph = bookings[key]?.photo;
+    const latest = (await loadKey(K_BOOKINGS, bookings, true)) || {};
+    const next = { ...latest }; delete next[key];
+    setBookings(next);
+    await saveKey(K_BOOKINGS, next, true);
+    if (ph?.path) deletePhoto(ph.path);
   };
   const toggleJoin = async (date, time) => {
     const nm = myName.trim();
@@ -791,6 +838,12 @@ export default function App() {
             {sessionsToShow.map((sess) => {
               const open = openSession === sess.key;
               const mine = myName && sess.list.some((s) => s.name.toLowerCase() === myName.trim().toLowerCase());
+              const ci = courtInfo(sess.list.length);
+              const confirmedList = sess.list.slice(0, ci.confirmed);
+              const waitList = sess.list.slice(ci.confirmed);
+              const nextPos = sess.list.length + 1;
+              const wouldWait = nextPos > (nextPos >= SECOND_COURT_AT ? 2 : 1) * COURT_CAP;
+              const bk = bookings[sess.key] || {};
               return (
                 <div key={sess.key} className="bd-reg-day">
                   <div className="bd-reg-head">
@@ -798,19 +851,25 @@ export default function App() {
                       <span className="bd-reg-slot">{fmtDate(sess.date)} · {sess.time}</span>
                       <span className="bd-reg-right">
                         {sess.date === today && <span className="bd-today">Today</span>}
-                        <span className="bd-reg-count"><Users size={12} /> {sess.list.length}</span>
+                        {(bk.booked || bk.photo) && <span className="bd-book-dot" title="Court booked">🎾</span>}
+                        <span className="bd-reg-count"><Users size={12} /> {ci.confirmed}/{TOTAL_CAP}{ci.waitlisted ? ` +${ci.waitlisted}` : ""}</span>
                         {open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                       </span>
                     </button>
                     <button className={"bd-join" + (mine ? " in" : "")} onClick={() => toggleJoin(sess.date, sess.time)}>
-                      {mine ? <><Check size={15} /> Going</> : "Join"}
+                      {mine ? <><Check size={15} /> Going</> : (wouldWait ? "Waitlist" : "Join")}
                     </button>
                   </div>
                   {open && (
                     <>
-                      {sess.list.length ? (
+                      <div className="bd-court-info">
+                        {ci.courts} court{ci.courts > 1 ? "s" : ""} · {ci.confirmed}/{TOTAL_CAP} playing
+                        {ci.waitlisted ? ` · ${ci.waitlisted} on waitlist` : ""}
+                      </div>
+
+                      {confirmedList.length ? (
                         <ol className="bd-reg-list">
-                          {sess.list.map((s, i) => (
+                          {confirmedList.map((s, i) => (
                             <li key={s.id} className="bd-reg-item">
                               <span className="bd-reg-num">{i + 1}</span>
                               <span className="bd-reg-name">{s.name}</span>
@@ -822,6 +881,23 @@ export default function App() {
                       ) : (
                         <p className="bd-reg-none">No one yet — tap Join, or add someone below.</p>
                       )}
+
+                      {waitList.length > 0 && (
+                        <>
+                          <div className="bd-wait-label">Waitlist{sess.list.length < SECOND_COURT_AT ? ` · needs ${SECOND_COURT_AT} to open court 2` : ""}</div>
+                          <ol className="bd-reg-list">
+                            {waitList.map((s, i) => (
+                              <li key={s.id} className="bd-reg-item wait">
+                                <span className="bd-reg-num wait">{ci.confirmed + i + 1}</span>
+                                <span className="bd-reg-name">{s.name}</span>
+                                <span className="bd-reg-when">{s.at ? fmtRegTime(s.at) : ""}</span>
+                                <button onClick={() => removeSignup(s.id)} aria-label={"Remove " + s.name}><X size={14} /></button>
+                              </li>
+                            ))}
+                          </ol>
+                        </>
+                      )}
+
                       <div className="bd-addname">
                         <input className="bd-input" placeholder="Add someone else…" value={addNameDraft}
                           onChange={(e) => setAddNameDraft(e.target.value)}
@@ -829,6 +905,32 @@ export default function App() {
                         <button className="bd-btn primary square" disabled={!addNameDraft.trim()} onClick={() => addOther(sess.date, sess.time)} aria-label="Add name">
                           <Plus size={18} />
                         </button>
+                      </div>
+
+                      <div className={"bd-booking" + (bk.booked || bk.photo ? " done" : "")}>
+                        {bk.photo ? (
+                          <>
+                            <img src={bk.photo.url} alt="court booking" onClick={() => setLightbox(bk.photo.url)} />
+                            <div className="bd-booking-txt">
+                              <b>Court booked</b>
+                              <span>Tap the screenshot to view</span>
+                            </div>
+                            <button className="bd-mini danger" onClick={() => clearBooking(sess.key)}>Clear</button>
+                          </>
+                        ) : (
+                          <>
+                            <div className="bd-booking-txt">
+                              <b>{bk.booked ? "Court booked" : "Court not booked yet"}</b>
+                              <span>{bk.booked ? "Add the confirmation screenshot" : "Reminder: book the court and save the screenshot"}</span>
+                            </div>
+                            <label className={"bd-btn ghost" + (bookingBusy === sess.key ? " busy" : "")}>
+                              {bookingBusy === sess.key ? <RefreshCw size={15} /> : <Camera size={15} />} Screenshot
+                              <input type="file" accept="image/*" hidden
+                                onChange={(e) => { uploadBooking(sess.key, e.target.files[0]); e.target.value = ""; }} />
+                            </label>
+                            <button className="bd-mini" onClick={() => toggleBooked(sess.key)}>{bk.booked ? "Undo" : "Mark booked"}</button>
+                          </>
+                        )}
                       </div>
                     </>
                   )}
@@ -1571,6 +1673,20 @@ const CSS = `
 .bd-reg-none{color:var(--muted);font-size:13px;padding:4px 2px 10px;border-top:1.5px solid var(--line);margin:0;}
 .bd-addname{display:flex;gap:8px;padding:8px 2px 4px;}
 .bd-addname .bd-input{flex:1;margin:0;}
+.bd-court-info{font-size:12px;color:var(--muted);font-weight:600;padding:8px 2px 6px;border-top:1.5px solid var(--line);text-transform:uppercase;letter-spacing:.4px;}
+.bd-wait-label{font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:.6px;padding:8px 2px 2px;}
+.bd-reg-item.wait{opacity:.7;}
+.bd-reg-num.wait{background:var(--panel-2);color:var(--muted);}
+.bd-book-dot{font-size:12px;}
+.bd-booking{display:flex;align-items:center;gap:10px;margin-top:10px;padding:10px;border:1.5px dashed var(--line);border-radius:11px;}
+.bd-booking.done{border-style:solid;border-color:var(--accent);}
+.bd-booking img{width:46px;height:46px;object-fit:cover;border-radius:8px;cursor:pointer;flex-shrink:0;}
+.bd-booking-txt{flex:1;display:flex;flex-direction:column;min-width:0;}
+.bd-booking-txt b{font-size:13px;}
+.bd-booking-txt span{font-size:11px;color:var(--muted);}
+.bd-booking .bd-btn.ghost{flex-shrink:0;padding:8px 12px;font-size:13px;}
+.bd-booking .bd-btn.busy{pointer-events:none;}
+.bd-booking .bd-btn.busy svg{animation:bd-spin .7s linear infinite;}
 .bd-reg-bar .bd-reg-right svg{color:var(--muted);}
 .bd-reg-day .bd-reg-list{border-top:1.5px solid var(--line);padding-top:2px;padding-bottom:4px;}
 .bd-reg-slot{color:var(--ink);}
