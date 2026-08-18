@@ -243,9 +243,7 @@ export default function App() {
   const [lightbox, setLightbox] = useState(null); // photo url being viewed full-screen
   const [uploadingKey, setUploadingKey] = useState(null); // "rIdx-mIdx" currently uploading
   const [installEvt, setInstallEvt] = useState(null); // Android/Chrome deferred install prompt
-  const [installDismissed, setInstallDismissed] = useState(() =>
-    typeof window !== "undefined" && localStorage.getItem("ms_install_dismissed") === "1"
-  );
+  const [installHintOpen, setInstallHintOpen] = useState(false); // iOS "add to home screen" hint
   const [signups, setSignups] = useState([]);
   const [reg, setReg] = useState({ date: todayStr(), hour: "7", ap: "PM", name: "" });
   const [regMsg, setRegMsg] = useState("");
@@ -289,16 +287,15 @@ export default function App() {
   const isStandalone = typeof window !== "undefined" &&
     (window.matchMedia?.("(display-mode: standalone)").matches || window.navigator.standalone === true);
   const isIOS = typeof navigator !== "undefined" && /iphone|ipad|ipod/i.test(navigator.userAgent);
-  const showInstall = !isStandalone && !installDismissed && (installEvt || isIOS);
-  const doInstall = async () => {
-    if (!installEvt) return;
-    installEvt.prompt();
-    try { await installEvt.userChoice; } catch {}
-    setInstallEvt(null);
-  };
-  const dismissInstall = () => {
-    setInstallDismissed(true);
-    localStorage.setItem("ms_install_dismissed", "1");
+  const canInstall = !isStandalone && (installEvt || isIOS);
+  const onInstallClick = async () => {
+    if (installEvt) {
+      installEvt.prompt();
+      try { await installEvt.userChoice; } catch {}
+      setInstallEvt(null);
+    } else {
+      setInstallHintOpen(true); // iOS: show the Add to Home Screen hint
+    }
   };
 
   // No lock set -> open session (setup). Lock set -> only unlocked devices may edit.
@@ -806,6 +803,11 @@ export default function App() {
           <div className="bd-head-main">
             <h1 className="bd-title">Marina Smashers</h1>
             <div className="bd-head-right">
+              {canInstall && (
+                <button className="bd-iconbtn install" onClick={onInstallClick} aria-label="Install app" title="Install app">
+                  <Download size={17} />
+                </button>
+              )}
               <button className={"bd-iconbtn" + (syncing ? " spin" : "")} onClick={reloadShared} aria-label="Sync latest scores" title="Pull the latest scores">
                 <RefreshCw size={17} />
               </button>
@@ -831,24 +833,6 @@ export default function App() {
           </div>
         </div>
       </header>
-
-      {showInstall && (
-        <div className="bd-install">
-          <img src="/icon-192.png" alt="" className="bd-install-icon" />
-          <div className="bd-install-txt">
-            <b>Install Marina Smashers</b>
-            {installEvt
-              ? <span>Add it to your home screen for one-tap access.</span>
-              : <span>Tap <Share size={12} /> Share, then <b>Add to Home Screen</b>.</span>}
-          </div>
-          {installEvt && (
-            <button className="bd-btn primary" onClick={doInstall}>
-              <Download size={15} /> Install
-            </button>
-          )}
-          <button className="bd-install-x" onClick={dismissInstall} aria-label="Dismiss"><X size={16} /></button>
-        </div>
-      )}
 
       {lock && !unlocked && (
         <div className="bd-shared">
@@ -1592,6 +1576,24 @@ export default function App() {
           <img src={lightbox} alt="match" onClick={(e) => e.stopPropagation()} />
         </div>
       )}
+      {installHintOpen && (
+        <div className="bd-modal-bg" onClick={() => setInstallHintOpen(false)}>
+          <div className="bd-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="bd-modal-ic" style={{ background: "var(--panel-2)", color: "var(--accent)" }}><Download size={20} /></div>
+            <h3>Install Marina Smashers</h3>
+            <p>On iPhone, add it to your home screen in two taps:</p>
+            <ol style={{ textAlign: "left", margin: "0 0 16px", paddingLeft: 20, color: "var(--soft)", fontSize: 14, lineHeight: 1.7 }}>
+              <li>Tap the <b>Share</b> button <Share size={13} style={{ verticalAlign: "-2px" }} /> at the bottom of Safari.</li>
+              <li>Choose <b>Add to Home Screen</b>.</li>
+              <li>Tap <b>Add</b> — done.</li>
+            </ol>
+            <p style={{ fontSize: 12, color: "var(--muted)" }}>Make sure you're in Safari (not inside another app's browser).</p>
+            <div className="bd-modal-actions">
+              <button className="bd-btn primary" onClick={() => setInstallHintOpen(false)}>Got it</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1642,6 +1644,7 @@ const CSS = `
 .bd-iconbtn:hover{color:var(--accent);border-color:var(--accent);}
 .bd-iconbtn.spin svg{animation:bd-spin .7s linear;}
 .bd-iconbtn.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent);}
+.bd-iconbtn.install{border-color:var(--accent);color:var(--accent);}
 .bd-input.err{border-color:var(--clay);box-shadow:0 0 0 3px var(--clay-bg);}
 @keyframes bd-spin{to{transform:rotate(360deg);}}
 
