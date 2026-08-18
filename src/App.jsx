@@ -5,7 +5,7 @@ import {
   Crown, Trophy, Users, UserPlus, X, Trash2, RotateCw,
   Play, Feather, Utensils, Check, Calendar, Plus,
   RefreshCw, Sun, Moon, AlertTriangle, Share2, Save, ClipboardCopy,
-  Lock, LockOpen, ChevronDown, ChevronUp, KeyRound, Camera, CalendarCheck
+  Lock, LockOpen, ChevronDown, ChevronUp, KeyRound, Camera, CalendarCheck, Download, Share
 } from "lucide-react";
 
 // Hash the passcode so the readable database only ever holds a hash, not the code.
@@ -242,6 +242,10 @@ export default function App() {
   const [openSession, setOpenSession] = useState(null); // register session key expanded
   const [lightbox, setLightbox] = useState(null); // photo url being viewed full-screen
   const [uploadingKey, setUploadingKey] = useState(null); // "rIdx-mIdx" currently uploading
+  const [installEvt, setInstallEvt] = useState(null); // Android/Chrome deferred install prompt
+  const [installDismissed, setInstallDismissed] = useState(() =>
+    typeof window !== "undefined" && localStorage.getItem("ms_install_dismissed") === "1"
+  );
   const [signups, setSignups] = useState([]);
   const [reg, setReg] = useState({ date: todayStr(), hour: "7", ap: "PM", name: "" });
   const [regMsg, setRegMsg] = useState("");
@@ -270,6 +274,32 @@ export default function App() {
     window.addEventListener("hashchange", sync);
     return () => { window.removeEventListener("popstate", sync); window.removeEventListener("hashchange", sync); };
   }, []);
+
+  // PWA install: capture the Android/Chrome prompt; hide everything once installed.
+  useEffect(() => {
+    const onPrompt = (e) => { e.preventDefault(); setInstallEvt(e); };
+    const onInstalled = () => { setInstallEvt(null); setInstallDismissed(true); };
+    window.addEventListener("beforeinstallprompt", onPrompt);
+    window.addEventListener("appinstalled", onInstalled);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", onPrompt);
+      window.removeEventListener("appinstalled", onInstalled);
+    };
+  }, []);
+  const isStandalone = typeof window !== "undefined" &&
+    (window.matchMedia?.("(display-mode: standalone)").matches || window.navigator.standalone === true);
+  const isIOS = typeof navigator !== "undefined" && /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const showInstall = !isStandalone && !installDismissed && (installEvt || isIOS);
+  const doInstall = async () => {
+    if (!installEvt) return;
+    installEvt.prompt();
+    try { await installEvt.userChoice; } catch {}
+    setInstallEvt(null);
+  };
+  const dismissInstall = () => {
+    setInstallDismissed(true);
+    localStorage.setItem("ms_install_dismissed", "1");
+  };
 
   // No lock set -> open session (setup). Lock set -> only unlocked devices may edit.
   const canEdit = lock ? unlocked : true;
@@ -801,6 +831,24 @@ export default function App() {
           </div>
         </div>
       </header>
+
+      {showInstall && (
+        <div className="bd-install">
+          <img src="/icon-192.png" alt="" className="bd-install-icon" />
+          <div className="bd-install-txt">
+            <b>Install Marina Smashers</b>
+            {installEvt
+              ? <span>Add it to your home screen for one-tap access.</span>
+              : <span>Tap <Share size={12} /> Share, then <b>Add to Home Screen</b>.</span>}
+          </div>
+          {installEvt && (
+            <button className="bd-btn primary" onClick={doInstall}>
+              <Download size={15} /> Install
+            </button>
+          )}
+          <button className="bd-install-x" onClick={dismissInstall} aria-label="Dismiss"><X size={16} /></button>
+        </div>
+      )}
 
       {lock && !unlocked && (
         <div className="bd-shared">
@@ -1607,6 +1655,15 @@ const CSS = `
 .bd-tab:hover:not(.on){color:var(--soft);background:var(--panel);}
 
 .bd-main{max-width:640px;margin:0 auto;padding:16px 14px calc(84px + env(safe-area-inset-bottom));}
+.bd-install{max-width:640px;margin:0 auto 4px;display:flex;align-items:center;gap:11px;background:var(--panel);border:1.5px solid var(--accent);border-radius:14px;padding:10px 12px;}
+.bd-install-icon{width:40px;height:40px;border-radius:10px;flex-shrink:0;}
+.bd-install-txt{flex:1;display:flex;flex-direction:column;min-width:0;line-height:1.3;}
+.bd-install-txt b{font-size:14px;}
+.bd-install-txt span{font-size:12px;color:var(--soft);display:flex;align-items:center;gap:4px;flex-wrap:wrap;}
+.bd-install-txt span b{display:inline;font-size:12px;color:var(--ink);}
+.bd-install .bd-btn{flex-shrink:0;padding:9px 14px;}
+.bd-install-x{flex-shrink:0;border:none;background:transparent;color:var(--muted);cursor:pointer;padding:4px;border-radius:6px;display:flex;}
+.bd-install-x:hover{color:var(--ink);background:var(--panel-2);}
 
 .bd-add{display:flex;gap:8px;margin-bottom:16px;}
 .bd-input{flex:1;padding:12px 14px;border:1.5px solid var(--line);border-radius:12px;background:var(--panel);font-size:15px;font-family:inherit;color:var(--ink);outline:none;transition:.15s;}
