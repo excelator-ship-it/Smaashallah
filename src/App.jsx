@@ -94,10 +94,27 @@ function ratingsFrom(rounds) {
   for (const id in acc) r[id] = acc[id].g ? acc[id].d / acc[id].g : 0;
   return r;
 }
-// For 4 players, pair strongest+weakest vs the two middles — most balanced and most "strong+weak".
-function splitTeams(four, rating) {
-  const s = [...four].sort((x, y) => (rating[y] || 0) - (rating[x] || 0)); // high → low
-  return { teamA: [s[0], s[3]], teamB: [s[1], s[2]] };
+// Score all 3 ways to split 4 players into 2 teams; pick the one that best avoids
+// repeat partners/opponents first, then favours balanced strong+weak teams.
+function bestSplit(four, rating, partner, opponent, key, wImb, wSpread) {
+  const splits = [
+    [[four[0], four[1]], [four[2], four[3]]],
+    [[four[0], four[2]], [four[1], four[3]]],
+    [[four[0], four[3]], [four[1], four[2]]],
+  ];
+  let teams = null, best = Infinity;
+  for (const [A, B] of splits) {
+    let c = 0;
+    c += (partner[key(A[0], A[1])] || 0) * 1000; // avoiding repeat partners dominates
+    c += (partner[key(B[0], B[1])] || 0) * 1000;
+    A.forEach((a) => B.forEach((b) => (c += (opponent[key(a, b)] || 0) * 40)));
+    const rs = [...A, ...B].map((id) => rating[id] || 0).sort((x, y) => y - x);
+    const imbalance = Math.abs((rs[0] + rs[3]) - (rs[1] + rs[2]));
+    const spread = rs[0] - rs[3];
+    c += imbalance * wImb - spread * wSpread;
+    if (c < best) { best = c; teams = { teamA: A, teamB: B }; }
+  }
+  return { teams, cost: best };
 }
 
 function makeRound(players, rounds) {
@@ -106,7 +123,6 @@ function makeRound(players, rounds) {
   const restCount = n % 4;
   const stats = computeStats(players, rounds);
   const rating = ratingsFrom(rounds);
-  const rOf = (id) => rating[id] || 0;
 
   const ordered = shuffle(ids).sort((a, b) => {
     const ma = stats[a].matches, mb = stats[b].matches;
@@ -117,33 +133,20 @@ function makeRound(players, rounds) {
   const active = ordered.slice(restCount);
 
   const { partner, opponent, key } = historyCounts(rounds);
-  const W_IMBALANCE = 2;   // keep the two teams' strength close
-  const W_SPREAD = 2;      // reward pairing a strong player with a weak one
-  const cost = (arr) => {
-    let c = 0;
-    arr.forEach((m) => {
-      c += (partner[key(m.teamA[0], m.teamA[1])] || 0) * 100;
-      c += (partner[key(m.teamB[0], m.teamB[1])] || 0) * 100;
-      m.teamA.forEach((a) =>
-        m.teamB.forEach((b) => (c += opponent[key(a, b)] || 0))
-      );
-      const rs = [...m.teamA, ...m.teamB].map(rOf).sort((x, y) => y - x); // h, m1, m2, l
-      const imbalance = Math.abs((rs[0] + rs[3]) - (rs[1] + rs[2]));
-      const spread = rs[0] - rs[3];
-      c += imbalance * W_IMBALANCE - spread * W_SPREAD;
-    });
-    return c;
-  };
+  const W_IMBALANCE = 2; // keep the two teams' strength close
+  const W_SPREAD = 2;    // reward pairing a strong player with a weak one
 
   let best = null, bestC = Infinity;
-  for (let t = 0; t < 700; t++) {
+  for (let t = 0; t < 1200; t++) {
     const s = shuffle(active);
     const matches = [];
+    let total = 0;
     for (let i = 0; i < s.length; i += 4) {
-      matches.push({ ...splitTeams([s[i], s[i + 1], s[i + 2], s[i + 3]], rating), scoreA: "", scoreB: "" });
+      const bs = bestSplit([s[i], s[i + 1], s[i + 2], s[i + 3]], rating, partner, opponent, key, W_IMBALANCE, W_SPREAD);
+      matches.push({ ...bs.teams, scoreA: "", scoreB: "" });
+      total += bs.cost;
     }
-    const c = cost(matches);
-    if (c < bestC) { bestC = c; best = matches; }
+    if (total < bestC) { bestC = total; best = matches; }
   }
   return { id: uid(), matches: best || [], resting };
 }
