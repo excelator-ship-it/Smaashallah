@@ -80,11 +80,33 @@ function historyCounts(rounds) {
   return { partner, opponent, key };
 }
 
+// Within-session skill signal: average point-difference per completed game (0 if none yet).
+function ratingsFrom(rounds) {
+  const acc = {};
+  rounds.forEach((rd) => rd.matches.forEach((m) => {
+    const a = m.scoreA === "" ? null : Number(m.scoreA);
+    const b = m.scoreB === "" ? null : Number(m.scoreB);
+    if (a == null || b == null || isNaN(a) || isNaN(b)) return;
+    m.teamA.forEach((id) => { (acc[id] = acc[id] || { d: 0, g: 0 }); acc[id].d += a - b; acc[id].g++; });
+    m.teamB.forEach((id) => { (acc[id] = acc[id] || { d: 0, g: 0 }); acc[id].d += b - a; acc[id].g++; });
+  }));
+  const r = {};
+  for (const id in acc) r[id] = acc[id].g ? acc[id].d / acc[id].g : 0;
+  return r;
+}
+// For 4 players, pair strongest+weakest vs the two middles — most balanced and most "strong+weak".
+function splitTeams(four, rating) {
+  const s = [...four].sort((x, y) => (rating[y] || 0) - (rating[x] || 0)); // high → low
+  return { teamA: [s[0], s[3]], teamB: [s[1], s[2]] };
+}
+
 function makeRound(players, rounds) {
   const ids = players.map((p) => p.id);
   const n = ids.length;
   const restCount = n % 4;
   const stats = computeStats(players, rounds);
+  const rating = ratingsFrom(rounds);
+  const rOf = (id) => rating[id] || 0;
 
   const ordered = shuffle(ids).sort((a, b) => {
     const ma = stats[a].matches, mb = stats[b].matches;
@@ -95,6 +117,8 @@ function makeRound(players, rounds) {
   const active = ordered.slice(restCount);
 
   const { partner, opponent, key } = historyCounts(rounds);
+  const W_IMBALANCE = 2;   // keep the two teams' strength close
+  const W_SPREAD = 2;      // reward pairing a strong player with a weak one
   const cost = (arr) => {
     let c = 0;
     arr.forEach((m) => {
@@ -103,6 +127,10 @@ function makeRound(players, rounds) {
       m.teamA.forEach((a) =>
         m.teamB.forEach((b) => (c += opponent[key(a, b)] || 0))
       );
+      const rs = [...m.teamA, ...m.teamB].map(rOf).sort((x, y) => y - x); // h, m1, m2, l
+      const imbalance = Math.abs((rs[0] + rs[3]) - (rs[1] + rs[2]));
+      const spread = rs[0] - rs[3];
+      c += imbalance * W_IMBALANCE - spread * W_SPREAD;
     });
     return c;
   };
@@ -112,15 +140,10 @@ function makeRound(players, rounds) {
     const s = shuffle(active);
     const matches = [];
     for (let i = 0; i < s.length; i += 4) {
-      matches.push({
-        teamA: [s[i], s[i + 1]],
-        teamB: [s[i + 2], s[i + 3]],
-        scoreA: "",
-        scoreB: "",
-      });
+      matches.push({ ...splitTeams([s[i], s[i + 1], s[i + 2], s[i + 3]], rating), scoreA: "", scoreB: "" });
     }
     const c = cost(matches);
-    if (c < bestC) { bestC = c; best = matches; if (c === 0) break; }
+    if (c < bestC) { bestC = c; best = matches; }
   }
   return { id: uid(), matches: best || [], resting };
 }
