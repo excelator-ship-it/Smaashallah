@@ -1,4 +1,4 @@
-# Smashallah — self-hosted on your own domain
+# Marina Smashers — self-hosted on your own domain
 
 This is your badminton app as a normal website, with a real database so games
 are stored permanently and shared across everyone in the group.
@@ -24,7 +24,7 @@ localStorage for personal preferences (light/dark theme). Nothing else changed.
 ---
 
 ## Step 1 — Create the database (Supabase)
-1. Go to supabase.com, sign in, click **New project**. Name it `smashallah`,
+1. Go to supabase.com, sign in, click **New project**. Name it `marina-smashers`,
    set a database password (save it), pick the region closest to Dubai, create.
 2. Wait ~2 min for it to provision.
 3. Open **SQL Editor -> New query**, paste the entire contents of `supabase.sql`
