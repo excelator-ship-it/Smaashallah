@@ -265,6 +265,8 @@ export default function App() {
   const [pass, setPass] = useState("");
   const [passErr, setPassErr] = useState("");
   const [openWeek, setOpenWeek] = useState(null); // history entry id currently expanded
+  const [openMatches, setOpenMatches] = useState(null); // week id whose match log is shown
+  const [matchFilter, setMatchFilter] = useState(null); // player name filter in match log
   const [openSession, setOpenSession] = useState(null); // register session key expanded
   const [lightbox, setLightbox] = useState(null); // photo url being viewed full-screen
   const [uploadingKey, setUploadingKey] = useState(null); // "rIdx-mIdx" currently uploading
@@ -474,6 +476,17 @@ export default function App() {
     const champ = played[0], spoon = played[played.length - 1];
     msg += `\n\n👑 ${champ.name}`;
     if (spoon && spoon.name !== champ.name) msg += `    🥄 ${spoon.name}`;
+    msg += `\n\n${appUrl()}`;
+    shareToWhatsApp(msg);
+  };
+  const shareWeek = (h) => {
+    const st = h.standings || [];
+    let msg = `🏸 *Marina Smashers* — ${h.date}`;
+    if (st.length) {
+      msg += `\n\n` + st.map((s, i) => `${i + 1}. ${s.name} — ${s.points} pts (${s.wins}W ${s.draws}D ${s.losses}L)`).join("\n");
+    }
+    if (h.champ) msg += `\n\n👑 ${h.champ.name}`;
+    if (h.spoon && (!h.champ || h.spoon.name !== h.champ.name)) msg += `    🥄 ${h.spoon.name}`;
     msg += `\n\n${appUrl()}`;
     shareToWhatsApp(msg);
   };
@@ -761,6 +774,15 @@ export default function App() {
           draws: r.draws, losses: r.losses, diff: r.diff,
         })),
       photos: rounds.flatMap((r) => r.matches.flatMap((m) => m.photos || [])),
+      matchLog: rounds.map((r, ri) => ({
+        round: ri + 1,
+        matches: r.matches.map((m) => ({
+          teamA: m.teamA.map(nameOf),
+          teamB: m.teamB.map(nameOf),
+          scoreA: m.scoreA,
+          scoreB: m.scoreB,
+        })),
+      })),
     };
     const nextHist = [entry, ...history];
     setHistory(nextHist);
@@ -1372,7 +1394,7 @@ export default function App() {
                               : `${h.players} players · ${h.rounds} rounds`}
                           </span>
                         </div>
-                        {(hasTable || (h.photos && h.photos.length > 0)) && (open ? <ChevronUp size={16} /> : <ChevronDown size={16} />)}
+                        {(hasTable || (h.matchLog && h.matchLog.length > 0) || (h.photos && h.photos.length > 0)) && (open ? <ChevronUp size={16} /> : <ChevronDown size={16} />)}
                       </button>
 
                       <div className="bd-hrows">
@@ -1408,6 +1430,74 @@ export default function App() {
                       {open && !hasTable && (
                         <p className="bd-data-note" style={{ marginTop: 8 }}>Full standings weren't saved for this week.</p>
                       )}
+
+                      {open && (
+                        <div className="bd-hactions">
+                          <button className="bd-iconbtn" onClick={() => shareWeek(h)} aria-label="Share this week" title="Share this week to WhatsApp">
+                            <Share2 size={16} />
+                          </button>
+                          {h.matchLog && h.matchLog.length > 0 && (
+                            <button className="bd-mini" onClick={() => { setOpenMatches(openMatches === h.id ? null : h.id); setMatchFilter(null); }}>
+                              {openMatches === h.id ? "Hide match results" : "Match results"}
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {open && openMatches === h.id && h.matchLog && (() => {
+                        const names = (h.standings && h.standings.length)
+                          ? h.standings.map((s) => s.name)
+                          : [...new Set(h.matchLog.flatMap((rd) => rd.matches.flatMap((m) => [...m.teamA, ...m.teamB])))];
+                        return (
+                          <div className="bd-mlog">
+                            <div className="bd-mlog-filter">
+                              <button className={"bd-chip-sm" + (!matchFilter ? " on" : "")} onClick={() => setMatchFilter(null)}>All</button>
+                              {names.map((nm) => (
+                                <button key={nm} className={"bd-chip-sm" + (matchFilter === nm ? " on" : "")} onClick={() => setMatchFilter(matchFilter === nm ? null : nm)}>{nm}</button>
+                              ))}
+                            </div>
+                            {h.matchLog.map((rd) => {
+                              const ms = matchFilter
+                                ? rd.matches.filter((m) => [...m.teamA, ...m.teamB].includes(matchFilter))
+                                : rd.matches;
+                              if (!ms.length) return null;
+                              return (
+                                <div key={rd.round} className="bd-mlog-round">
+                                  <div className="bd-mlog-rh">Round {rd.round}</div>
+                                  {ms.map((m, mi) => {
+                                    const na = m.scoreA === "" ? null : Number(m.scoreA);
+                                    const nb = m.scoreB === "" ? null : Number(m.scoreB);
+                                    const done = na != null && nb != null && !isNaN(na) && !isNaN(nb);
+                                    const aWin = done && na > nb, bWin = done && nb > na, draw = done && na === nb;
+                                    let tag = null;
+                                    if (matchFilter && done) {
+                                      const onA = m.teamA.includes(matchFilter);
+                                      tag = draw ? "D" : ((onA && aWin) || (!onA && bWin)) ? "W" : "L";
+                                    }
+                                    return (
+                                      <div key={mi} className="bd-mlog-m">
+                                        <div className={"bd-mlog-side" + (aWin ? " win" : draw ? " draw" : "")}>
+                                          <span className="bd-mlog-team">{m.teamA.join(" & ")}</span>
+                                          <span className="bd-mlog-score">{m.scoreA === "" ? "–" : m.scoreA}</span>
+                                        </div>
+                                        <div className={"bd-mlog-side" + (bWin ? " win" : draw ? " draw" : "")}>
+                                          <span className="bd-mlog-team">{m.teamB.join(" & ")}</span>
+                                          <span className="bd-mlog-score">{m.scoreB === "" ? "–" : m.scoreB}</span>
+                                        </div>
+                                        {done
+                                          ? (!draw && <span className="bd-mlog-marg">+{Math.abs(na - nb)}</span>)
+                                          : <span className="bd-mlog-nos">no score</span>}
+                                        {tag && <span className={"bd-mlog-tag " + tag}>{tag}</span>}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
+
                       {open && h.photos && h.photos.length > 0 && (
                         <div className="bd-gallery">
                           {h.photos.map((ph, i) => (
@@ -1836,6 +1926,27 @@ const CSS = `
 .bd-addphoto.busy{pointer-events:none;color:var(--accent);}
 .bd-addphoto.busy svg{animation:bd-spin .7s linear infinite;}
 .bd-gallery{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:12px;border-top:1.5px solid var(--line);padding-top:10px;}
+.bd-hactions{display:flex;align-items:center;gap:8px;margin-top:12px;}
+.bd-mlog{margin-top:10px;border-top:1.5px solid var(--line);padding-top:10px;}
+.bd-mlog-filter{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;}
+.bd-chip-sm{font-size:12px;font-weight:600;font-family:inherit;border:1.5px solid var(--line);background:transparent;color:var(--soft);border-radius:20px;padding:4px 11px;cursor:pointer;transition:.15s;}
+.bd-chip-sm:hover{border-color:var(--accent);color:var(--accent);}
+.bd-chip-sm.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent);}
+.bd-mlog-round{margin-bottom:12px;}
+.bd-mlog-rh{font-family:'Barlow Semi Condensed',sans-serif;font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:6px;}
+.bd-mlog-m{position:relative;background:var(--panel);border:1.5px solid var(--line);border-radius:10px;padding:8px 11px;margin-bottom:6px;}
+.bd-mlog-side{display:flex;align-items:center;gap:8px;padding:3px 0;}
+.bd-mlog-team{flex:1;font-size:13px;color:var(--soft);min-width:0;}
+.bd-mlog-score{font-family:'Barlow Semi Condensed',sans-serif;font-weight:700;font-size:16px;color:var(--muted);min-width:24px;text-align:right;}
+.bd-mlog-side.win .bd-mlog-team{color:var(--ink);font-weight:600;}
+.bd-mlog-side.win .bd-mlog-score{color:var(--accent);}
+.bd-mlog-side.draw .bd-mlog-score{color:var(--gold);}
+.bd-mlog-marg{position:absolute;top:8px;right:11px;font-size:10px;font-weight:700;color:var(--accent);}
+.bd-mlog-nos{position:absolute;top:9px;right:11px;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
+.bd-mlog-tag{position:absolute;bottom:8px;right:11px;font-size:10px;font-weight:800;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;}
+.bd-mlog-tag.W{background:var(--accent);color:var(--on-accent);}
+.bd-mlog-tag.L{background:var(--clay-bg);color:var(--clay);}
+.bd-mlog-tag.D{background:var(--gold-bg);color:var(--gold);}
 .bd-gallery img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;cursor:pointer;}
 .bd-lightbox{position:fixed;inset:0;background:rgba(0,0,0,.9);display:flex;align-items:center;justify-content:center;z-index:60;padding:16px;animation:bd-fade .15s;}
 .bd-lightbox img{max-width:100%;max-height:100%;border-radius:8px;}
